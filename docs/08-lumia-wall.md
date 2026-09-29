@@ -40,3 +40,24 @@ Build gotchas, both fixed in `build.ps1`:
    was on screen.
 
 It checks sockets in **LISTEN** state (`st == 0A`) only. Leftover TIME_WAIT sockets on the port fooled an earlier version.
+
+## Music: laptop now playing + live visualiser (WallBridge)
+
+ridge/WallBridge is a small, windowless .NET 9 app on the laptop (~50 MB RAM, near-zero CPU when idle). It starts from a
+shell:startup shortcut.
+- **Now playing** from Windows' own media sessions (SMTC, what the volume overlay shows): Spotify, browsers and most
+  players. Spotify is preferred when several are open. Position is extrapolated between SMTC updates. Hashed
+  AUMIDs are shown as "browser".
+- **Transport:** play/pause, next, previous.
+- **Spectrum:** WASAPI **loopback** (what the laptop plays, not the mic), 2048-pt FFT, 32 log bands (40 Hz–16 kHz),
+  ~30 frames/s, slow AGC, 1 byte per band. Captures **only while the tablet is streaming it**.
+- Serves loopback-only 127.0.0.1:8770 over a raw socket (HttpListener rejects Host: 127.0.0.1 without a urlacl):
+  /state, /art, /cmd/{playpause|next|prev}, /spectrum (endless 32-byte frames).
+- The tablet reaches it through **db reverse tcp:8770 tcp:8770**, which scripts/windows/ipwebcam-tunnel.ps1 keeps
+  alive next to the camera forward.
+- Build: dotnet publish bridge\WallBridge -c Release -o bridge\out (a local ridge/nuget.config adds nuget.org).
+
+On the tablet, MusicBridge.java polls /state every second, fetches the cover on track change, and streams
+/spectrum only while something plays **and** Lumia Wall is on screen. VisView draws the bars with instant attack,
+slow release and falling peak caps. The **music** section is the WP8 now-playing layout (cover, title, artist, progress,
+round transport buttons, visualiser), and the grace wall music tile shows the live cover and track.

@@ -7,7 +7,8 @@ param(
     [string]$Adb = (Join-Path $PSScriptRoot '..\..\downloads\adb-1.0.40\platform-tools\adb.exe'),
     [string]$Serial = $env:TABLET_SERIAL,
     [int]$LocalPort = 8765,
-    [int]$RemotePort = 8080
+    [int]$RemotePort = 8080,
+    [int]$BridgePort = 8770
 )
 
 while ($true) {
@@ -17,6 +18,11 @@ while ($true) {
         $list = (& $Adb forward --list 2>$null) -join "`n"
         if ($list -notmatch "tcp:$LocalPort tcp:$RemotePort") {
             & $Adb -s $target forward "tcp:$LocalPort" "tcp:$RemotePort" 2>$null | Out-Null
+        }
+        # Reverse direction: the tablet reaches the laptop's WallBridge (music + spectrum) on its own 127.0.0.1:8770.
+        $rlist = (& $Adb -s $target reverse --list 2>$null) -join "`n"
+        if ($rlist -notmatch "tcp:$BridgePort") {
+            & $Adb -s $target reverse "tcp:$BridgePort" "tcp:$BridgePort" 2>$null | Out-Null
         }
     }
     Start-Sleep -Seconds 5

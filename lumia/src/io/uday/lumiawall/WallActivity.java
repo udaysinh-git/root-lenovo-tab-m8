@@ -67,7 +67,7 @@ public class WallActivity extends Activity {
 
         pano = new Panorama(this, "uday's great wall");
         buildStart(pano.addSection("grace wall", 8 * UNIT + 7 * GAP + 40));
-        buildMusic(pano.addSection("music", 560));
+        buildMusic(pano.addSection("music", 780));
         buildStatus(pano.addSection("status", 600));
         buildApps(pano.addSection("apps", 520));
         setContentView(pano);
@@ -106,9 +106,19 @@ public class WallActivity extends Activity {
         Tile.centredGlyph(this, display.front, Glyph.MONITOR, 58);
         display.setOnClickListener(v -> launch(PKG_SPACEDESK));
 
-        // music (wide) -> the music section (phase 2: laptop now playing)
+        // music (wide) -> the music section; goes live (cover + track) while the laptop plays
         Tile music = place(body, new Tile(this, Metro.VIOLET, 4, 2, "music"), 0, 2);
-        Tile.centredGlyph(this, music.front, Glyph.MUSIC, 58);
+        musicTileArt = new android.widget.ImageView(this);
+        musicTileArt.setScaleType(android.widget.ImageView.ScaleType.CENTER_CROP);
+        musicTileArt.setAlpha(0.45f);
+        music.front.addView(musicTileArt, new FrameLayout.LayoutParams(-1, -1));
+        musicTileGlyph = Tile.centredGlyph(this, music.front, Glyph.MUSIC, 58);
+        LinearLayout mt = Tile.stack(this, music.front);
+        musicTileTitle = Tile.text(this, "", 24, Metro.light, Metro.TEXT);
+        musicTileTitle.setMaxLines(2);
+        musicTileArtist = Tile.text(this, "", 15, Metro.semilight, Metro.TEXT_DIM);
+        musicTileArtist.setSingleLine(true);
+        mt.addView(musicTileTitle); mt.addView(musicTileArtist);
         music.setOnClickListener(v -> pano.scrollToSection(1));
 
         // reader (medium) -> KOReader
@@ -157,18 +167,155 @@ public class WallActivity extends Activity {
         return v;
     }
 
-    // ---------------------------------------------------------------- music (phase 2 placeholder)
+    // ---------------------------------------------------------------- music (laptop now playing via WallBridge)
+
+    private android.widget.ImageView musicTileArt, npArt;
+    private View musicTileGlyph, npArtGlyph;
+    private TextView musicTileTitle, musicTileArtist;
+    private TextView npTitle, npArtist, npMeta, npTime;
+    private View npProgressFill;
+    private FrameLayout npProgress;
+    private Glyph npPlayGlyph;
+    private VisView vis;
+    private MusicBridge bridge;
+    private boolean resumed;
 
     private void buildMusic(FrameLayout body) {
-        LinearLayout l = new LinearLayout(this);
-        l.setOrientation(LinearLayout.VERTICAL);
-        l.addView(Tile.text(this, "nothing playing", 30, Metro.light, Metro.TEXT));
-        TextView sub = Tile.text(this, "your laptop's music and a live visualiser will show up here once the laptop bridge is running",
-                17, Metro.semilight, Metro.TEXT_DIM);
-        LinearLayout.LayoutParams slp = new LinearLayout.LayoutParams(-1, -2);
-        slp.topMargin = Metro.dp(8);
-        l.addView(sub, slp);
-        body.addView(l, new FrameLayout.LayoutParams(-1, -2));
+        LinearLayout root = new LinearLayout(this);
+        root.setOrientation(LinearLayout.VERTICAL);
+
+        LinearLayout row = new LinearLayout(this);
+        row.setOrientation(LinearLayout.HORIZONTAL);
+
+        // cover
+        FrameLayout artBox = new FrameLayout(this);
+        artBox.setBackgroundColor(Metro.STEEL);
+        npArt = new android.widget.ImageView(this);
+        npArt.setScaleType(android.widget.ImageView.ScaleType.CENTER_CROP);
+        artBox.addView(npArt, new FrameLayout.LayoutParams(-1, -1));
+        npArtGlyph = Tile.centredGlyph(this, artBox, Glyph.MUSIC, 70);
+        row.addView(artBox, new LinearLayout.LayoutParams(Metro.dp(214), Metro.dp(214)));
+
+        // text + transport
+        LinearLayout col = new LinearLayout(this);
+        col.setOrientation(LinearLayout.VERTICAL);
+        npTitle = Tile.text(this, "", 34, Metro.light, Metro.TEXT);
+        npTitle.setMaxLines(2);
+        npArtist = Tile.text(this, "", 20, Metro.semilight, Metro.TEXT_DIM);
+        npArtist.setSingleLine(true);
+        npMeta = Tile.text(this, "", 14, Metro.semilight, Metro.TEXT_FAINT);
+        npMeta.setSingleLine(true);
+        col.addView(npTitle);
+        LinearLayout.LayoutParams al = new LinearLayout.LayoutParams(-1, -2);
+        al.topMargin = Metro.dp(4);
+        col.addView(npArtist, al);
+        col.addView(npMeta, new LinearLayout.LayoutParams(-1, -2));
+
+        npProgress = new FrameLayout(this);
+        npProgress.setBackgroundColor(Metro.TEXT_FAINT);
+        npProgressFill = new View(this);
+        npProgressFill.setBackgroundColor(Metro.VIOLET | 0xFF000000);
+        npProgressFill.setPivotX(0);
+        npProgressFill.setScaleX(0f);
+        npProgress.addView(npProgressFill, new FrameLayout.LayoutParams(-1, -1));
+        LinearLayout.LayoutParams pl = new LinearLayout.LayoutParams(-1, Metro.dp(3));
+        pl.topMargin = Metro.dp(16);
+        col.addView(npProgress, pl);
+        npTime = Tile.text(this, "", 13, Metro.semilight, Metro.TEXT_FAINT);
+        LinearLayout.LayoutParams tl = new LinearLayout.LayoutParams(-2, -2);
+        tl.topMargin = Metro.dp(4);
+        col.addView(npTime, tl);
+
+        LinearLayout transport = new LinearLayout(this);
+        transport.setOrientation(LinearLayout.HORIZONTAL);
+        transport.addView(roundButton(Glyph.PREV, () -> bridge.command("prev")));
+        View play = roundButton(Glyph.PLAY, () -> bridge.command("playpause"));
+        npPlayGlyph = (Glyph) ((FrameLayout) play).getChildAt(0);
+        transport.addView(play);
+        transport.addView(roundButton(Glyph.NEXT, () -> bridge.command("next")));
+        LinearLayout.LayoutParams trl = new LinearLayout.LayoutParams(-2, -2);
+        trl.topMargin = Metro.dp(12);
+        col.addView(transport, trl);
+
+        LinearLayout.LayoutParams cl = new LinearLayout.LayoutParams(0, -2, 1f);
+        cl.leftMargin = Metro.dp(22);
+        row.addView(col, cl);
+        root.addView(row, new LinearLayout.LayoutParams(-1, -2));
+
+        vis = new VisView(this, Metro.VIOLET | 0xFF000000);
+        LinearLayout.LayoutParams vl = new LinearLayout.LayoutParams(-1, Metro.dp(104));
+        vl.topMargin = Metro.dp(18);
+        root.addView(vis, vl);
+
+        body.addView(root, new FrameLayout.LayoutParams(-1, -1));
+
+        bridge = new MusicBridge(new MusicBridge.Listener() {
+            @Override public void onState(MusicBridge.State s) { showState(s); }
+            @Override public void onArt(android.graphics.Bitmap art) { showArt(art); }
+        }, vis);
+        showState(new MusicBridge.State());
+    }
+
+    /** WP8 transport button: outlined circle with a glyph. */
+    private View roundButton(int glyph, final Runnable action) {
+        FrameLayout f = new FrameLayout(this);
+        android.graphics.drawable.GradientDrawable d = new android.graphics.drawable.GradientDrawable();
+        d.setShape(android.graphics.drawable.GradientDrawable.OVAL);
+        d.setStroke(Metro.dp(2), Metro.TEXT);
+        f.setBackground(d);
+        Glyph g = new Glyph(this, glyph);
+        f.addView(g, new FrameLayout.LayoutParams(Metro.dp(26), Metro.dp(26), Gravity.CENTER));
+        LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(Metro.dp(54), Metro.dp(54));
+        lp.rightMargin = Metro.dp(18);
+        f.setLayoutParams(lp);
+        f.setOnTouchListener(Metro.TILT);
+        f.setOnClickListener(v -> action.run());
+        return f;
+    }
+
+    private void showState(MusicBridge.State s) {
+        boolean has = s.connected && !s.title.isEmpty();
+        if (!s.connected) {
+            npTitle.setText("laptop not connected");
+            npArtist.setText("start WallBridge on the laptop (it runs at sign-in)");
+            npMeta.setText("");
+        } else if (!has) {
+            npTitle.setText("nothing playing");
+            npArtist.setText("play something on the laptop");
+            npMeta.setText("");
+        } else {
+            npTitle.setText(s.title.toLowerCase(Locale.getDefault()));
+            npArtist.setText(s.artist.isEmpty() ? s.app : s.artist.toLowerCase(Locale.getDefault()));
+            StringBuilder meta = new StringBuilder();
+            if (!s.album.isEmpty()) meta.append(s.album.toLowerCase(Locale.getDefault()));
+            if (!s.app.isEmpty() && !s.artist.isEmpty()) meta.append(meta.length() > 0 ? " · " : "").append(s.app);
+            npMeta.setText(meta.toString());
+        }
+        float frac = s.durationMs > 0 ? Math.min(1f, (float) s.positionMs / s.durationMs) : 0f;
+        npProgressFill.setScaleX(frac);
+        npTime.setText(s.durationMs > 0 ? fmt(s.positionMs) + " / " + fmt(s.durationMs) : "");
+        npPlayGlyph.setKind(s.playing ? Glyph.PAUSE : Glyph.PLAY);
+
+        // live music tile on "grace wall"
+        musicTileTitle.setText(has ? s.title.toLowerCase(Locale.getDefault()) : "");
+        musicTileArtist.setText(has ? (s.artist.isEmpty() ? s.app : s.artist.toLowerCase(Locale.getDefault())) : "");
+        musicTileGlyph.setVisibility(has ? View.INVISIBLE : View.VISIBLE);
+        musicTileArt.setVisibility(has ? View.VISIBLE : View.INVISIBLE);
+
+        // spectrum only while something plays and we're on screen
+        bridge.setSpectrum(resumed && s.connected && s.playing);
+    }
+
+    private void showArt(android.graphics.Bitmap art) {
+        npArt.setImageBitmap(art);
+        musicTileArt.setImageBitmap(art);
+        npArtGlyph.setVisibility(art == null ? View.VISIBLE : View.INVISIBLE);
+    }
+
+    private static String fmt(long ms) {
+        long s = ms / 1000;
+        return s >= 3600 ? String.format(Locale.US, "%d:%02d:%02d", s / 3600, s / 60 % 60, s % 60)
+                : String.format(Locale.US, "%d:%02d", s / 60, s % 60);
     }
 
     // ---------------------------------------------------------------- status
@@ -291,6 +438,8 @@ public class WallActivity extends Activity {
         super.onResume();
         hideSystemBars();
         launching = false;
+        resumed = true;
+        bridge.start();
         ui.post(tick);
         ui.postDelayed(flipper, 6000);
         bg.post(this::probeAll);
@@ -306,6 +455,8 @@ public class WallActivity extends Activity {
         super.onPause();
         ui.removeCallbacks(tick);
         ui.removeCallbacks(flipper);
+        resumed = false;
+        bridge.stop();
     }
 
     @Override public void onWindowFocusChanged(boolean hasFocus) {

@@ -9,7 +9,11 @@ import android.view.View;
 
 /** Thin monoline glyphs in the spirit of Segoe MDL2, drawn in a 24x24 design space and scaled. */
 final class Glyph extends View {
-    static final int MONITOR = 0, BOOK = 1, MANGA = 2, CAMERA = 3, SERVER = 4, BATTERY = 5, MUSIC = 6, CLOUD = 7;
+    static final int MONITOR = 0, BOOK = 1, MANGA = 2, CAMERA = 3, SERVER = 4, BATTERY = 5, MUSIC = 6, CLOUD = 7,
+            PREV = 8, PLAY = 9, PAUSE = 10, NEXT = 11;
+
+    private int kindOverride = -1;
+    void setKind(int k) { kindOverride = k; invalidate(); }
 
     private final int kind;
     private final Paint p = new Paint(Paint.ANTI_ALIAS_FLAG);
@@ -35,7 +39,25 @@ final class Glyph extends View {
         p.setStrokeWidth(1.3f);
         p.setStyle(Paint.Style.STROKE);
         path.reset();
-        switch (kind) {
+        switch (kindOverride >= 0 ? kindOverride : kind) {
+            case PREV:
+                c.drawLine(6, 6, 6, 18, p);
+                path.moveTo(18, 6); path.lineTo(9, 12); path.lineTo(18, 18); path.close();
+                c.drawPath(path, p);
+                break;
+            case NEXT:
+                c.drawLine(18, 6, 18, 18, p);
+                path.moveTo(6, 6); path.lineTo(15, 12); path.lineTo(6, 18); path.close();
+                c.drawPath(path, p);
+                break;
+            case PLAY:
+                path.moveTo(8, 5); path.lineTo(19, 12); path.lineTo(8, 19); path.close();
+                c.drawPath(path, p);
+                break;
+            case PAUSE:
+                c.drawLine(9, 6, 9, 18, p);
+                c.drawLine(15, 6, 15, 18, p);
+                break;
             case MONITOR:
                 c.drawRoundRect(new RectF(2, 4, 22, 17), 1, 1, p);
                 c.drawLine(12, 17, 12, 20.5f, p);

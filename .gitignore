@@ -34,3 +34,9 @@ vcam/TabletCamRegister/*.obj
 # Lumia Wall build output
 lumia/build/
 
+
+# WallBridge build output
+bridge/out/
+bridge/WallBridge/bin/
+bridge/WallBridge/obj/
+
