@@ -32,6 +32,7 @@ Full `getprop` highlights and the partition list: [`docs/device-info_stock.txt`]
 4. [Charge limiter for an always-plugged tablet](docs/04-charge-limiter.md)
 5. [Use it as a Windows extra monitor (spacedesk over USB)](docs/05-wall-display-spacedesk.md)
 6. [Troubleshooting and dead ends](docs/06-troubleshooting.md)
+7. [Use it as an extra webcam (Camo over USB)](docs/07-webcam-camo.md)
 
 ## New findings
 
