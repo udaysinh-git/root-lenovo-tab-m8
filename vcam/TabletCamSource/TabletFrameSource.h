@@ -43,6 +43,7 @@ private:
     ULONGLONG m_frameTick = 0;
 
     UINT m_targetW = 1280, m_targetH = 720;
+    DWORD m_rotation = 0;                                   // 0/90/180/270, HKLM\SOFTWARE\TabletCamera\Rotation
     std::atomic<ULONGLONG> m_lastRequestTick{ 0 };
     std::atomic<bool> m_running{ false };
     std::atomic<bool> m_quit{ false };

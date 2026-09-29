@@ -1,0 +1,437 @@
+package io.uday.lumiawall;
+
+import android.app.Activity;
+import android.content.Intent;
+import android.net.wifi.WifiManager;
+import android.os.Bundle;
+import android.os.Handler;
+import android.os.HandlerThread;
+import android.os.Looper;
+import android.view.Gravity;
+import android.view.View;
+import android.view.WindowManager;
+import android.widget.FrameLayout;
+import android.widget.LinearLayout;
+import android.widget.TextView;
+import android.widget.Toast;
+import java.text.SimpleDateFormat;
+import java.util.ArrayList;
+import java.util.Date;
+import java.util.List;
+import java.util.Locale;
+import java.util.Random;
+
+/** Lumia Wall: a Windows Phone 8 style panorama home for the wall-mounted tablet. */
+public class WallActivity extends Activity {
+    // Where things live (see the project docs).
+    static final String GRACE = "192.168.1.10";
+    static final double LAT = 18.52, LON = 73.86;          // Pune
+
+    static final String PKG_SPACEDESK = "ph.spacedesk.beta";
+    static final String PKG_KOREADER = "org.koreader.launcher";
+    static final String PKG_MIHON = "app.mihon";
+
+    // Tile grid: 1x1 unit + gap, in dp. 4 rows fit under the panorama headers at 800 px tall.
+    static final int UNIT = 86, GAP = 6;
+
+    private final Handler ui = new Handler(Looper.getMainLooper());
+    private Handler bg;
+    private final Random rnd = new Random();
+    private final List<View> tiles = new ArrayList<>();
+    private final List<Tile> flippers = new ArrayList<>();
+    private Panorama pano;
+    private boolean launching;
+
+    // live views
+    private TextView clockTime, clockDate, clockBackDay, clockBackWeek;
+    private TextView wTemp, wText, wBackHiLo, wBackHum;
+    private TextView camBack, graceBack, battBack;
+    private Glyph battGlyph;
+    private TextView stTablet, stCamera, stGrace, stWifi;
+
+    @Override protected void onCreate(Bundle b) {
+        super.onCreate(b);
+        Metro.density = getResources().getDisplayMetrics().density;
+        Metro.init(this);
+        getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
+
+        // Start the camera streamer while we're in front: a camera foreground service started from the
+        // foreground keeps camera access later, when spacedesk or a reader is on screen.
+        if (checkSelfPermission(android.Manifest.permission.CAMERA) == android.content.pm.PackageManager.PERMISSION_GRANTED) {
+            CameraStreamService.start(this);
+        }
+
+        HandlerThread t = new HandlerThread("probes");
+        t.start();
+        bg = new Handler(t.getLooper());
+
+        pano = new Panorama(this, "uday's great wall");
+        buildStart(pano.addSection("grace wall", 8 * UNIT + 7 * GAP + 40));
+        buildMusic(pano.addSection("music", 560));
+        buildStatus(pano.addSection("status", 600));
+        buildApps(pano.addSection("apps", 520));
+        setContentView(pano);
+    }
+
+    // ---------------------------------------------------------------- start
+
+    private void buildStart(FrameLayout body) {
+        // clock (wide)
+        Tile clock = place(body, new Tile(this, Metro.COBALT, 4, 2, "clock"), 0, 0);
+        LinearLayout cs = Tile.stack(this, clock.front);
+        clockTime = Tile.text(this, "", 58, Metro.light, Metro.TEXT);
+        clockDate = Tile.text(this, "", 18, Metro.semilight, Metro.TEXT_DIM);
+        cs.addView(clockTime); cs.addView(clockDate);
+        LinearLayout cb = Tile.stack(this, clock.back);
+        clockBackDay = Tile.text(this, "", 34, Metro.light, Metro.TEXT);
+        clockBackWeek = Tile.text(this, "", 16, Metro.semilight, Metro.TEXT_DIM);
+        cb.addView(clockBackDay); cb.addView(clockBackWeek);
+        clock.flippable = true; flippers.add(clock);
+
+        // weather (medium)
+        Tile weather = place(body, new Tile(this, Metro.TEAL, 2, 2, "pune"), 4, 0);
+        LinearLayout ws = Tile.stack(this, weather.front);
+        wTemp = Tile.text(this, "--°", 46, Metro.light, Metro.TEXT);
+        wText = Tile.text(this, "", 15, Metro.semilight, Metro.TEXT_DIM);
+        ws.addView(wTemp); ws.addView(wText);
+        LinearLayout wb = Tile.stack(this, weather.back);
+        wBackHiLo = Tile.text(this, "", 22, Metro.light, Metro.TEXT);
+        wBackHum = Tile.text(this, "", 15, Metro.semilight, Metro.TEXT_DIM);
+        wb.addView(wBackHiLo); wb.addView(wBackHum);
+        weather.flippable = true; flippers.add(weather);
+        weather.setOnClickListener(v -> refreshWeather());
+
+        // display (medium) -> spacedesk
+        Tile display = place(body, new Tile(this, Metro.CRIMSON, 2, 2, "display"), 6, 0);
+        Tile.centredGlyph(this, display.front, Glyph.MONITOR, 58);
+        display.setOnClickListener(v -> launch(PKG_SPACEDESK));
+
+        // music (wide) -> the music section (phase 2: laptop now playing)
+        Tile music = place(body, new Tile(this, Metro.VIOLET, 4, 2, "music"), 0, 2);
+        Tile.centredGlyph(this, music.front, Glyph.MUSIC, 58);
+        music.setOnClickListener(v -> pano.scrollToSection(1));
+
+        // reader (medium) -> KOReader
+        Tile reader = place(body, new Tile(this, Metro.EMERALD, 2, 2, "reader"), 4, 2);
+        Tile.centredGlyph(this, reader.front, Glyph.BOOK, 58);
+        reader.setOnClickListener(v -> launch(PKG_KOREADER));
+
+        // small tiles: manga, camera, grace, battery
+        Tile manga = place(body, new Tile(this, Metro.AMBER, 1, 1, "manga"), 6, 2);
+        Tile.centredGlyph(this, manga.front, Glyph.MANGA, 40);
+        manga.setOnClickListener(v -> launch(PKG_MIHON));
+
+        Tile cam = place(body, new Tile(this, Metro.STEEL, 1, 1, "camera"), 7, 2);
+        Tile.centredGlyph(this, cam.front, Glyph.CAMERA, 40);
+        camBack = smallBack(cam);
+        cam.flippable = true; flippers.add(cam);
+        cam.setOnClickListener(v -> pano.scrollToSection(2));
+
+        Tile grace = place(body, new Tile(this, Metro.MAUVE, 1, 1, "grace"), 6, 3);
+        Tile.centredGlyph(this, grace.front, Glyph.SERVER, 40);
+        graceBack = smallBack(grace);
+        grace.flippable = true; flippers.add(grace);
+        grace.setOnClickListener(v -> pano.scrollToSection(2));
+
+        Tile batt = place(body, new Tile(this, Metro.TAUPE, 1, 1, "battery"), 7, 3);
+        battGlyph = (Glyph) Tile.centredGlyph(this, batt.front, Glyph.BATTERY, 44);
+        battBack = smallBack(batt);
+        batt.flippable = true; flippers.add(batt);
+        batt.setOnClickListener(v -> pano.scrollToSection(2));
+    }
+
+    private Tile place(FrameLayout body, Tile t, int col, int row) {
+        int w = t.cols * UNIT + (t.cols - 1) * GAP, h = t.rows * UNIT + (t.rows - 1) * GAP;
+        FrameLayout.LayoutParams lp = new FrameLayout.LayoutParams(Metro.dp(w), Metro.dp(h));
+        lp.leftMargin = Metro.dp(col * (UNIT + GAP));
+        lp.topMargin = Metro.dp(row * (UNIT + GAP));
+        body.addView(t, lp);
+        tiles.add(t);
+        return t;
+    }
+
+    private TextView smallBack(Tile t) {
+        TextView v = Tile.text(this, "", 15, Metro.semilight, Metro.TEXT);
+        v.setGravity(Gravity.CENTER);
+        t.back.addView(v, new FrameLayout.LayoutParams(-1, -1));
+        return v;
+    }
+
+    // ---------------------------------------------------------------- music (phase 2 placeholder)
+
+    private void buildMusic(FrameLayout body) {
+        LinearLayout l = new LinearLayout(this);
+        l.setOrientation(LinearLayout.VERTICAL);
+        l.addView(Tile.text(this, "nothing playing", 30, Metro.light, Metro.TEXT));
+        TextView sub = Tile.text(this, "your laptop's music and a live visualiser will show up here once the laptop bridge is running",
+                17, Metro.semilight, Metro.TEXT_DIM);
+        LinearLayout.LayoutParams slp = new LinearLayout.LayoutParams(-1, -2);
+        slp.topMargin = Metro.dp(8);
+        l.addView(sub, slp);
+        body.addView(l, new FrameLayout.LayoutParams(-1, -2));
+    }
+
+    // ---------------------------------------------------------------- status
+
+    private void buildStatus(FrameLayout body) {
+        LinearLayout l = new LinearLayout(this);
+        l.setOrientation(LinearLayout.VERTICAL);
+        stTablet = statusRow(l, "tablet");
+        stCamera = statusRow(l, "camera server");
+        stGrace = statusRow(l, "grace");
+        stWifi = statusRow(l, "wi-fi");
+        body.addView(l, new FrameLayout.LayoutParams(-1, -2));
+    }
+
+    private TextView statusRow(LinearLayout parent, String title) {
+        parent.addView(Tile.text(this, title, 24, Metro.light, Metro.TEXT));
+        TextView detail = Tile.text(this, "…", 16, Metro.semilight, Metro.TEXT_DIM);
+        LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(-1, -2);
+        lp.bottomMargin = Metro.dp(16);
+        lp.topMargin = Metro.dp(2);
+        parent.addView(detail, lp);
+        return detail;
+    }
+
+    // ---------------------------------------------------------------- apps (WP8 app list)
+
+    private LinearLayout appList;
+    private int appCount = -1;
+    private final List<View> appRows = new ArrayList<>();
+
+    private void buildApps(FrameLayout body) {
+        android.widget.ScrollView scroll = new android.widget.ScrollView(this);
+        scroll.setVerticalScrollBarEnabled(false);
+        scroll.setOverScrollMode(View.OVER_SCROLL_NEVER);
+        appList = new LinearLayout(this);
+        appList.setOrientation(LinearLayout.VERTICAL);
+        appList.setPadding(0, 0, 0, Metro.dp(24));
+        scroll.addView(appList, new FrameLayout.LayoutParams(-1, -2));
+        body.addView(scroll, new FrameLayout.LayoutParams(-1, -1));
+    }
+
+    /** Rebuilds the list when the set of launchable apps changed (installs/uninstalls). */
+    private void refreshApps() {
+        final android.content.pm.PackageManager pm = getPackageManager();
+        Intent main = new Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_LAUNCHER);
+        List<android.content.pm.ResolveInfo> apps = pm.queryIntentActivities(main, 0);
+        if (apps.size() == appCount) return;
+        appCount = apps.size();
+
+        final java.text.Collator col = java.text.Collator.getInstance();
+        java.util.Collections.sort(apps, (a, b) -> col.compare(
+                String.valueOf(a.loadLabel(pm)).toLowerCase(Locale.getDefault()),
+                String.valueOf(b.loadLabel(pm)).toLowerCase(Locale.getDefault())));
+
+        appList.removeAllViews();
+        tiles.removeAll(appRows);
+        appRows.clear();
+        String lastLetter = "";
+        for (final android.content.pm.ResolveInfo ri : apps) {
+            if (getPackageName().equals(ri.activityInfo.packageName)) continue;   // not ourselves
+            String name = String.valueOf(ri.loadLabel(pm)).toLowerCase(Locale.getDefault());
+            String letter = name.isEmpty() ? "#" : name.substring(0, 1);
+            if (!Character.isLetter(letter.charAt(0))) letter = "#";
+            if (!letter.equals(lastLetter)) {
+                appList.addView(letterTile(letter));
+                lastLetter = letter;
+            }
+            appList.addView(appRow(ri, name, pm));
+        }
+    }
+
+    /** WP8 jump-list header: a small outlined accent square with the letter bottom-left. */
+    private View letterTile(String letter) {
+        FrameLayout f = new FrameLayout(this);
+        android.graphics.drawable.GradientDrawable d = new android.graphics.drawable.GradientDrawable();
+        d.setColor(0x00000000);
+        d.setStroke(Metro.dp(2), Metro.COBALT);
+        f.setBackground(d);
+        TextView t = Tile.text(this, letter, 24, Metro.light, Metro.TEXT);
+        FrameLayout.LayoutParams tl = new FrameLayout.LayoutParams(-2, -2, Gravity.BOTTOM | Gravity.START);
+        tl.setMargins(Metro.dp(6), 0, 0, Metro.dp(2));
+        f.addView(t, tl);
+        LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(Metro.dp(44), Metro.dp(44));
+        lp.setMargins(0, Metro.dp(14), 0, Metro.dp(8));
+        f.setLayoutParams(lp);
+        return f;
+    }
+
+    private View appRow(final android.content.pm.ResolveInfo ri, String name, android.content.pm.PackageManager pm) {
+        LinearLayout row = new LinearLayout(this);
+        row.setOrientation(LinearLayout.HORIZONTAL);
+        row.setGravity(Gravity.CENTER_VERTICAL);
+
+        // Icon on an accent square, like WP8's small app tiles.
+        FrameLayout sq = new FrameLayout(this);
+        sq.setBackgroundColor(Metro.COBALT);
+        android.widget.ImageView icon = new android.widget.ImageView(this);
+        icon.setImageDrawable(ri.loadIcon(pm));
+        sq.addView(icon, new FrameLayout.LayoutParams(Metro.dp(34), Metro.dp(34), Gravity.CENTER));
+        row.addView(sq, new LinearLayout.LayoutParams(Metro.dp(44), Metro.dp(44)));
+
+        TextView label = Tile.text(this, name, 22, Metro.light, Metro.TEXT);
+        label.setSingleLine(true);
+        LinearLayout.LayoutParams ll = new LinearLayout.LayoutParams(-1, -2);
+        ll.leftMargin = Metro.dp(14);
+        row.addView(label, ll);
+
+        LinearLayout.LayoutParams rl = new LinearLayout.LayoutParams(-1, Metro.dp(52));
+        row.setLayoutParams(rl);
+        row.setOnTouchListener(Metro.TILT);
+        row.setOnClickListener(v -> launch(ri.activityInfo.packageName));
+        tiles.add(row);   // rows swing out with the turnstile too
+        appRows.add(row);
+        return row;
+    }
+
+    // ---------------------------------------------------------------- lifecycle
+
+    @Override protected void onResume() {
+        super.onResume();
+        hideSystemBars();
+        launching = false;
+        ui.post(tick);
+        ui.postDelayed(flipper, 6000);
+        bg.post(this::probeAll);
+        // the camera service may still be binding its port right after a (re)start
+        ui.postDelayed(() -> bg.post(this::probeAll), 4000);
+        refreshWeather();
+        refreshApps();
+        // swing the tiles in
+        pano.post(() -> { Metro.resetTurnstile(tiles); Metro.turnstile(tiles, true, null); });
+    }
+
+    @Override protected void onPause() {
+        super.onPause();
+        ui.removeCallbacks(tick);
+        ui.removeCallbacks(flipper);
+    }
+
+    @Override public void onWindowFocusChanged(boolean hasFocus) {
+        super.onWindowFocusChanged(hasFocus);
+        if (hasFocus) hideSystemBars();
+    }
+
+    @Override public void onBackPressed() {
+        pano.scrollToSection(0);   // home screen: back just returns to the first section
+    }
+
+    @Override protected void onNewIntent(Intent i) {
+        super.onNewIntent(i);
+        pano.scrollToSection(0);   // pressing home while home = back to the first section
+    }
+
+    private void hideSystemBars() {
+        getWindow().getDecorView().setSystemUiVisibility(
+                View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY | View.SYSTEM_UI_FLAG_FULLSCREEN
+                        | View.SYSTEM_UI_FLAG_HIDE_NAVIGATION | View.SYSTEM_UI_FLAG_LAYOUT_STABLE
+                        | View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN | View.SYSTEM_UI_FLAG_LAYOUT_HIDE_NAVIGATION);
+    }
+
+    // ---------------------------------------------------------------- periodic work
+
+    private final SimpleDateFormat fTime = new SimpleDateFormat("H:mm", Locale.getDefault());
+    private final SimpleDateFormat fDate = new SimpleDateFormat("EEEE, d MMMM", Locale.getDefault());
+    private final SimpleDateFormat fDay = new SimpleDateFormat("EEEE", Locale.getDefault());
+    private final SimpleDateFormat fWeek = new SimpleDateFormat("'week' w · 'day' D", Locale.getDefault());
+    private long lastProbe;
+
+    private final Runnable tick = new Runnable() {
+        @Override public void run() {
+            Date now = new Date();
+            clockTime.setText(fTime.format(now));
+            clockDate.setText(fDate.format(now).toLowerCase(Locale.getDefault()));
+            clockBackDay.setText(fDay.format(now).toLowerCase(Locale.getDefault()));
+            clockBackWeek.setText(fWeek.format(now));
+            if (System.currentTimeMillis() - lastProbe > 60_000) bg.post(WallActivity.this::probeAll);
+            ui.postDelayed(this, 1000 - (System.currentTimeMillis() % 1000));
+        }
+    };
+
+    /** Every 6–11 s one random live tile flips, like a WP start screen at rest. */
+    private final Runnable flipper = new Runnable() {
+        @Override public void run() {
+            if (!flippers.isEmpty() && !launching) flippers.get(rnd.nextInt(flippers.size())).flip();
+            ui.postDelayed(this, 6000 + rnd.nextInt(5000));
+        }
+    };
+
+    private long lastWeather;
+
+    private void refreshWeather() {
+        if (System.currentTimeMillis() - lastWeather < 15 * 60_000 && wTemp.getText().length() > 3) return;
+        lastWeather = System.currentTimeMillis();
+        bg.post(() -> {
+            final Probes.Weather w = Probes.weather(LAT, LON);
+            ui.post(() -> {
+                if (w == null) { wText.setText("no connection"); lastWeather = 0; return; }
+                wTemp.setText(w.temp + "°");
+                wText.setText(w.summary());
+                wBackHiLo.setText("↑ " + w.high + "°   ↓ " + w.low + "°");
+                wBackHum.setText("humidity " + w.humidity + "%");
+            });
+        });
+    }
+
+    /** Runs on the background thread. */
+    private void probeAll() {
+        lastProbe = System.currentTimeMillis();
+        final Probes.Battery b = Probes.battery(this);
+        String camState;
+        try {
+            camState = new org.json.JSONObject(Probes.get("http://127.0.0.1:8080/status.json", 1500)).optString("camera", "idle");
+        } catch (Exception e) {
+            camState = "down";
+        }
+        final String camFinal = camState;
+        final boolean komga = Probes.open(GRACE, 25600, 1500);
+        final boolean jelly = Probes.open(GRACE, 8096, 1500);
+        final boolean ssh = Probes.open(GRACE, 22, 1500);
+        final String ip = wifiIp();
+        ui.post(() -> {
+            String state = b.charging ? "charging" : (b.plugged ? "holding (charge limit 50–60%)" : "on battery");
+            stTablet.setText(b.percent + "% · " + state);
+            battGlyph.setLevel(b.percent / 100f);
+            battBack.setText(b.percent + "%");
+
+            switch (camFinal) {
+                case "open": stCamera.setText("live · the laptop is using the front camera"); camBack.setText("live"); break;
+                case "idle": stCamera.setText("ready · front camera starts when the laptop asks"); camBack.setText("ready"); break;
+                default:     stCamera.setText("not running"); camBack.setText("off");
+            }
+
+            boolean any = ssh || komga || jelly;
+            stGrace.setText(!any ? "unreachable" :
+                    (ssh ? "ssh ✓" : "ssh ✗") + "   " + (komga ? "komga ✓" : "komga ✗") + "   " + (jelly ? "jellyfin ✓" : "jellyfin ✗"));
+            graceBack.setText(any ? "up" : "down");
+
+            stWifi.setText(ip == null ? "not connected" : ip);
+        });
+    }
+
+    @SuppressWarnings("deprecation")
+    private String wifiIp() {
+        try {
+            WifiManager wm = (WifiManager) getApplicationContext().getSystemService(WIFI_SERVICE);
+            int a = wm.getConnectionInfo().getIpAddress();
+            if (a == 0) return null;
+            return (a & 0xff) + "." + (a >> 8 & 0xff) + "." + (a >> 16 & 0xff) + "." + (a >> 24 & 0xff);
+        } catch (Exception e) {
+            return null;
+        }
+    }
+
+    // ---------------------------------------------------------------- launching
+
+    private void launch(String pkg) {
+        final Intent i = getPackageManager().getLaunchIntentForPackage(pkg);
+        if (i == null) { Toast.makeText(this, pkg + " isn't installed", Toast.LENGTH_SHORT).show(); return; }
+        if (launching) return;
+        launching = true;
+        Metro.turnstile(tiles, false, () -> {
+            startActivity(i);
+            overridePendingTransition(0, 0);
+        });
+    }
+}

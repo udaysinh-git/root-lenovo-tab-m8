@@ -9,6 +9,7 @@
 
 #pragma comment(lib, "winhttp")
 #pragma comment(lib, "windowscodecs")
+#pragma comment(lib, "advapi32")
 
 static const BYTE kSoi[2] = { 0xFF, 0xD8 };   // JPEG start-of-image
 static const BYTE kEoi[2] = { 0xFF, 0xD9 };   // JPEG end-of-image
@@ -76,6 +77,14 @@ void TabletFrameSource::EnsureRunning()
 void TabletFrameSource::Run()
 {
     (void)CoInitializeEx(nullptr, COINIT_MULTITHREADED);
+
+    // Re-read per session so a changed mounting takes effect the next time an app opens the camera.
+    DWORD rot = 0, size = sizeof(rot);
+    if (RegGetValueW(HKEY_LOCAL_MACHINE, L"SOFTWARE\\TabletCamera", L"Rotation", RRF_RT_REG_DWORD, nullptr, &rot, &size) == ERROR_SUCCESS)
+    {
+        m_rotation = rot % 360;
+    }
+
     while (!m_quit && GetTickCount64() - m_lastRequestTick < IDLE_STOP_MS)
     {
         if (!StreamOnce())
@@ -173,7 +182,7 @@ void TabletFrameSource::HandleJpeg(const BYTE* data, size_t size)
     if (sw != tw || sh != th)
     {
         if (FAILED(factory->CreateBitmapScaler(&scaler))) return;
-        if (FAILED(scaler->Initialize(frame.get(), tw, th, WICBitmapInterpolationModeLinear))) return;
+        if (FAILED(scaler->Initialize(source.get(), tw, th, WICBitmapInterpolationModeLinear))) return;
         source = scaler;
     }
 
@@ -184,6 +193,15 @@ void TabletFrameSource::HandleJpeg(const BYTE* data, size_t size)
 
     std::vector<BYTE> pixels(static_cast<size_t>(tw) * th * 4);
     if (FAILED(converter->CopyPixels(nullptr, tw * 4, static_cast<UINT>(pixels.size()), pixels.data()))) return;
+
+    // Mounting correction (the wall tablet hangs upside down). Done on the decoded pixels: WIC's
+    // FlipRotator needs bottom-up access that the sequential JPEG decoder can't give, so it failed
+    // every frame. 180 degrees is just the pixel order reversed. (Only 0 and 180 are supported.)
+    if (m_rotation == 180)
+    {
+        uint32_t* px = reinterpret_cast<uint32_t*>(pixels.data());
+        std::reverse(px, px + static_cast<size_t>(tw) * th);
+    }
 
     std::lock_guard<std::mutex> guard(m_lock);
     m_frame.swap(pixels);

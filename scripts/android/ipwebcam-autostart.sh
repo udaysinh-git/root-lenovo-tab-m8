@@ -23,12 +23,21 @@ apply_settings() {
     echo "$(date '+%F %T') settings applied (front camera, 1280x720, q60, upside-down)" >> "$LOG"
 }
 
+top_package() {
+    dumpsys activity activities 2>/dev/null | grep -m1 mResumedActivity | sed -n 's/.* u0 \([^/]*\)\/.*/\1/p'
+}
+
+# Starting the server puts IP Webcam's own screen in front; afterwards return to $1
+# (the app that was in front before), or to spacedesk if there is none.
 start_server() {
-    echo "$(date '+%F %T') starting IP Webcam server" >> "$LOG"
+    back_to="${1:-ph.spacedesk.beta}"
+    [ "$back_to" = "com.pas.webcam" ] && back_to="ph.spacedesk.beta"
+    echo "$(date '+%F %T') starting IP Webcam server (then back to $back_to)" >> "$LOG"
     am start -n com.pas.webcam/.Rolling -a android.intent.action.RUN >/dev/null 2>&1
     sleep 12
     apply_settings
-    monkey -p ph.spacedesk.beta -c android.intent.category.LAUNCHER 1 >/dev/null 2>&1
+    monkey -p "$back_to" -c android.intent.category.LAUNCHER 1 >/dev/null 2>&1 || \
+        monkey -p "$back_to" 1 >/dev/null 2>&1
 }
 
 echo "$(date '+%F %T') autostart watching port $PORT" > "$LOG"
@@ -42,6 +51,6 @@ else
 fi
 
 while true; do
-    listening || start_server
+    listening || start_server "$(top_package)"
     sleep 60
 done

@@ -7,12 +7,24 @@ display. Everything runs over the USB cable, with minimal laptop load.
 browsers, Discord, Teams...). It runs **only while an app is using the camera**.
 
 ```
-tablet: IP Webcam (background camera service, front camera) ── MJPEG on :8080, Wi-Fi blocked
+tablet: Lumia Wall's CameraStreamService (camera foreground service, front camera) ── MJPEG on 127.0.0.1:8080
    │ USB cable: adb forward  tcp:8765 → tcp:8080
 laptop: "Tablet Camera" = Windows 11 virtual camera (MFCreateVirtualCamera)
         whose media source pulls http://127.0.0.1:8765/video and decodes it with WIC
 ```
 
+> **Update (2026-09-30):** IP Webcam has been **replaced** by the streamer built into Lumia Wall
+> ([lumia/.../CameraStreamService.java](../lumia/src/io/uday/lumiawall/CameraStreamService.java), see
+> [chapter 8](08-lumia-wall.md)). IP Webcam's Play build **must** show an "IP Webcam is monitoring the area" overlay
+> to run in the background ("distribution policies require a visible camera overlay"). Revoking the overlay permission
+> makes it quit as soon as it leaves the screen. The built-in streamer:
+> - binds **127.0.0.1 only**, so it's reachable just through `adb forward`, with no firewall rules needed;
+> - runs the camera only while a client is connected, closing it 5 s after the last one;
+> - serves the same `/video`, `/shot.jpg`, `/status.json` endpoints;
+> - leaves the 180° mounting correction to the Windows side (`HKLM\SOFTWARE\TabletCamera\Rotation = 180`, applied
+>   to the decoded pixels; WIC's FlipRotator fails on sequential JPEG decodes).
+>
+> The IP Webcam notes below are kept for reference.
 ## Cameras on the tablet
 
 | ID | Facing | Sensor |

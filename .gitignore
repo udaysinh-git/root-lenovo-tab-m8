@@ -30,3 +30,7 @@ vcam/TabletCamRegister/*.obj
 *.iobj
 *.ipdb
 
+
+# Lumia Wall build output
+lumia/build/
+
