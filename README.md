@@ -33,6 +33,7 @@ Full `getprop` highlights and the partition list: [`docs/device-info_stock.txt`]
 5. [Use it as a Windows extra monitor (spacedesk over USB)](docs/05-wall-display-spacedesk.md)
 6. [Troubleshooting and dead ends](docs/06-troubleshooting.md)
 7. [Use it as an extra webcam at the same time as the display (Windows 11 virtual camera)](docs/07-webcam-camo.md)
+8. [Lumia Wall: a Windows Phone 8 home screen for the wall](docs/08-lumia-wall.md)
 
 ## New findings
 
