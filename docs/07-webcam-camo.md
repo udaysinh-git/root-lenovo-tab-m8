@@ -46,10 +46,15 @@ laptop: "Tablet Camera" = Windows 11 virtual camera (MFCreateVirtualCamera)
    adb shell dumpsys deviceidle whitelist +com.pas.webcam
    ```
 3. Open it and tap **Start server** at the bottom. It keeps running when you switch to spacedesk.
+   **Auto-start:** [`scripts/android/ipwebcam-autostart.sh`](../scripts/android/ipwebcam-autostart.sh) in `/data/adb/service.d/`
+   starts the server at boot via `am start -n com.pas.webcam/.Rolling -a android.intent.action.RUN`, re-applies the settings
+   below, brings spacedesk back to the front, and restarts the server within a minute if it dies. It checks for a socket in
+   LISTEN state, because leftover TIME_WAIT sockets on :8080 fooled a naive port check.
 4. **Lock it to the cable.** The server has no password by default, so anyone on your Wi-Fi could watch. Install
    [`scripts/android/ipwebcam-lockdown.sh`](../scripts/android/ipwebcam-lockdown.sh) into `/data/adb/service.d/`. It drops
    port 8080 on `wlan0`/`rndis0` for both IPv4 **and IPv6** (the server also listens on IPv6).
-5. Settings via its HTTP API (through the tunnel):
+5. Settings via its HTTP API (through the tunnel). **They are runtime-only and reset when the app restarts**, which is why the
+   autostart script re-applies them:
    ```sh
    curl "http://127.0.0.1:8765/settings/ffc?set=on"                 # front camera
    curl "http://127.0.0.1:8765/settings/video_size?set=1280x720"
