@@ -34,6 +34,9 @@ public class WallActivity extends Activity {
     // Tile grid: 1x1 unit + gap, in dp. 4 rows fit under the panorama headers at 800 px tall.
     static final int UNIT = 86, GAP = 6;
 
+    // Panorama section order.
+    static final int SEC_MUSIC = 1, SEC_LYRICS = 2, SEC_STATUS = 3;
+
     private final Handler ui = new Handler(Looper.getMainLooper());
     private Handler bg;
     private final Random rnd = new Random();
@@ -68,9 +71,12 @@ public class WallActivity extends Activity {
         pano = new Panorama(this, "uday's great wall");
         buildStart(pano.addSection("grace wall", 8 * UNIT + 7 * GAP + 40));
         buildMusic(pano.addSection("music", 780));
+        buildLyrics(pano.addSection("lyrics", 700));
         buildStatus(pano.addSection("status", 600));
         buildApps(pano.addSection("apps", 520));
         setContentView(pano);
+        showState(new MusicBridge.State());   // after all sections exist: it feeds music, lyrics and the tile
+        pano.onScroll = this::updateSpectrum;
     }
 
     // ---------------------------------------------------------------- start
@@ -119,7 +125,7 @@ public class WallActivity extends Activity {
         musicTileArtist = Tile.text(this, "", 15, Metro.semilight, Metro.TEXT_DIM);
         musicTileArtist.setSingleLine(true);
         mt.addView(musicTileTitle); mt.addView(musicTileArtist);
-        music.setOnClickListener(v -> pano.scrollToSection(1));
+        music.setOnClickListener(v -> pano.scrollToSection(SEC_MUSIC));
 
         // reader (medium) -> KOReader
         Tile reader = place(body, new Tile(this, Metro.EMERALD, 2, 2, "reader"), 4, 2);
@@ -135,19 +141,19 @@ public class WallActivity extends Activity {
         Tile.centredGlyph(this, cam.front, Glyph.CAMERA, 40);
         camBack = smallBack(cam);
         cam.flippable = true; flippers.add(cam);
-        cam.setOnClickListener(v -> pano.scrollToSection(2));
+        cam.setOnClickListener(v -> pano.scrollToSection(SEC_STATUS));
 
         Tile grace = place(body, new Tile(this, Metro.MAUVE, 1, 1, "grace"), 6, 3);
         Tile.centredGlyph(this, grace.front, Glyph.SERVER, 40);
         graceBack = smallBack(grace);
         grace.flippable = true; flippers.add(grace);
-        grace.setOnClickListener(v -> pano.scrollToSection(2));
+        grace.setOnClickListener(v -> pano.scrollToSection(SEC_STATUS));
 
         Tile batt = place(body, new Tile(this, Metro.TAUPE, 1, 1, "battery"), 7, 3);
         battGlyph = (Glyph) Tile.centredGlyph(this, batt.front, Glyph.BATTERY, 44);
         battBack = smallBack(batt);
         batt.flippable = true; flippers.add(batt);
-        batt.setOnClickListener(v -> pano.scrollToSection(2));
+        batt.setOnClickListener(v -> pano.scrollToSection(SEC_STATUS));
     }
 
     private Tile place(FrameLayout body, Tile t, int col, int row) {
@@ -252,8 +258,8 @@ public class WallActivity extends Activity {
         bridge = new MusicBridge(new MusicBridge.Listener() {
             @Override public void onState(MusicBridge.State s) { showState(s); }
             @Override public void onArt(android.graphics.Bitmap art) { showArt(art); }
+            @Override public void onLyrics(MusicBridge.Lyrics l) { showLyrics(l); }
         }, vis);
-        showState(new MusicBridge.State());
     }
 
     /** WP8 transport button: outlined circle with a glyph. */
@@ -295,6 +301,9 @@ public class WallActivity extends Activity {
         npProgressFill.setScaleX(frac);
         npTime.setText(s.durationMs > 0 ? fmt(s.positionMs) + " / " + fmt(s.durationMs) : "");
         npPlayGlyph.setKind(s.playing ? Glyph.PAUSE : Glyph.PLAY);
+        lyrics.setPosition(s.positionMs, s.playing);
+        if (s.estimated != lyricsEstimated) { lyricsEstimated = s.estimated; refreshLyricsLabel(); }
+        if (!has) showLyrics(null);
 
         // live music tile on "grace wall"
         musicTileTitle.setText(has ? s.title.toLowerCase(Locale.getDefault()) : "");
@@ -302,14 +311,101 @@ public class WallActivity extends Activity {
         musicTileGlyph.setVisibility(has ? View.INVISIBLE : View.VISIBLE);
         musicTileArt.setVisibility(has ? View.VISIBLE : View.INVISIBLE);
 
-        // spectrum only while something plays and we're on screen
-        bridge.setSpectrum(resumed && s.connected && s.playing);
+        lastState = s;
+        updateSpectrum();
+    }
+
+    private MusicBridge.State lastState = new MusicBridge.State();
+    private final android.graphics.Rect visRect = new android.graphics.Rect();
+
+    /** The visualiser (and the laptop's capture feeding it) runs only while music plays AND its section is in view. */
+    private void updateSpectrum() {
+        bridge.setSpectrum(resumed && lastState.connected && lastState.playing && vis.getGlobalVisibleRect(visRect));
     }
 
     private void showArt(android.graphics.Bitmap art) {
         npArt.setImageBitmap(art);
         musicTileArt.setImageBitmap(art);
         npArtGlyph.setVisibility(art == null ? View.VISIBLE : View.INVISIBLE);
+    }
+
+    // ---------------------------------------------------------------- lyrics (LRCLIB via WallBridge)
+
+    private LyricsView lyrics;
+    private TextView lyricsTrack;
+    private boolean lyricsIdle, lyricsEstimated;
+    private String lyricsLabel = "";
+
+    private void refreshLyricsLabel() {
+        lyricsTrack.setText(lyricsLabel.isEmpty() ? "" : lyricsEstimated
+                ? lyricsLabel + "  ·  timing estimated, tap a line to sync" : lyricsLabel);
+    }
+
+    private void buildLyrics(FrameLayout body) {
+        LinearLayout root = new LinearLayout(this);
+        root.setOrientation(LinearLayout.VERTICAL);
+        lyricsTrack = Tile.text(this, "", 16, Metro.semilight, Metro.TEXT_FAINT);
+        lyricsTrack.setSingleLine(true);
+        root.addView(lyricsTrack, new LinearLayout.LayoutParams(-1, -2));
+        lyrics = new LyricsView(this, Metro.VIOLET);
+        lyrics.setOnSeek(ms -> bridge.seek(ms, () ->
+                Toast.makeText(this, "this player can't jump to a line", Toast.LENGTH_SHORT).show()));
+        LinearLayout.LayoutParams ll = new LinearLayout.LayoutParams(-1, 0, 1f);
+        ll.topMargin = Metro.dp(8);
+        ll.rightMargin = Metro.dp(24);
+        root.addView(lyrics, ll);
+        body.addView(root, new FrameLayout.LayoutParams(-1, -1));
+        showLyrics(null);
+    }
+
+    /**
+     * {@code null} = nothing playing / not connected. The lyrics column exists only while the song has lyrics:
+     * it's hidden for "none", "error" and when idle, and emptied (not hidden, to avoid a flicker) while loading.
+     */
+    private void showLyrics(MusicBridge.Lyrics l) {
+        String source = l == null ? "idle" : l.source;
+        boolean has = source.equals("synced") || (source.equals("plain") && !l.plain.trim().isEmpty());
+        if (l == null) {
+            if (lyricsIdle) return;
+            lyricsIdle = true;
+        } else {
+            lyricsIdle = false;
+        }
+        if (has) {
+            String[] parts = l.key.split("\\|", 2);
+            lyricsLabel = (parts[0] + (parts.length > 1 && !parts[1].isEmpty() ? " · " + parts[1] : ""))
+                    .toLowerCase(Locale.getDefault());
+            refreshLyricsLabel();
+            if (source.equals("synced")) lyrics.setLyrics(l.times, l.lines, true, "");
+            else lyrics.setLyrics(new long[0], l.plain.split("\r?\n", -1), false, "");
+        } else {
+            lyricsLabel = "";
+            refreshLyricsLabel();
+            lyrics.setLyrics(new long[0], new String[0], false, "");
+        }
+        if (!source.equals("loading")) setLyricsShown(has);
+    }
+
+    /**
+     * Shows/hides the lyrics column without yanking the view: sections after it would shift by its width, so if
+     * one of those is on screen the scroll moves with it; if the lyrics themselves were on screen, glide to music.
+     */
+    private void setLyricsShown(boolean show) {
+        final View col = (View) lyrics.getParent().getParent().getParent();   // root -> body -> section column
+        if ((col.getVisibility() == View.VISIBLE) == show) return;
+        final int w = col.getLayoutParams().width;
+        final int left = pano.sections.getChildAt(SEC_MUSIC).getRight();
+        final int x = pano.getScrollX();
+        final int delta = show ? (x >= left ? w : 0) : (x >= left + w / 2 ? -w : 0);
+        final boolean backToMusic = !show && x > left - w / 2 && x < left + w / 2;
+        col.setVisibility(show ? View.VISIBLE : View.GONE);
+        pano.getViewTreeObserver().addOnGlobalLayoutListener(new android.view.ViewTreeObserver.OnGlobalLayoutListener() {
+            @Override public void onGlobalLayout() {
+                pano.getViewTreeObserver().removeOnGlobalLayoutListener(this);
+                if (delta != 0) pano.scrollTo(x + delta, 0);
+                else if (backToMusic) pano.scrollToSection(SEC_MUSIC);
+            }
+        });
     }
 
     private static String fmt(long ms) {

@@ -17,6 +17,7 @@ final class Panorama extends HorizontalScrollView {
     final LinearLayout sections;
     private final TextView title;
     private static final float TITLE_SPEED = 0.45f;   // title moves at 45% of content speed
+    Runnable onScroll;                                  // e.g. start/stop work for sections coming into view
 
     Panorama(Context c, String titleText) {
         super(c);
@@ -47,6 +48,7 @@ final class Panorama extends HorizontalScrollView {
     @Override protected void onScrollChanged(int l, int t, int oldl, int oldt) {
         super.onScrollChanged(l, t, oldl, oldt);
         title.setTranslationX(l * (1f - TITLE_SPEED));    // counteract part of the scroll
+        if (onScroll != null) onScroll.run();
     }
 
     // ---- settling: exactly ONE glide per release, on our own curve ----
@@ -84,6 +86,7 @@ final class Panorama extends HorizontalScrollView {
     private int nearestBehind(int velocityX) {
         int x = getScrollX(), idx = 0;
         for (int i = 0; i < sections.getChildCount(); i++) {
+            if (sections.getChildAt(i).getVisibility() == GONE) continue;   // hidden section (e.g. no lyrics)
             if (sections.getChildAt(i).getLeft() <= x + (velocityX > 0 ? 1 : 0)) idx = i;
         }
         return idx;
@@ -92,6 +95,7 @@ final class Panorama extends HorizontalScrollView {
     private int nearest() {
         int x = getScrollX(), best = 0, bestD = Integer.MAX_VALUE;
         for (int i = 0; i < sections.getChildCount(); i++) {
+            if (sections.getChildAt(i).getVisibility() == GONE) continue;
             int d = Math.abs(sections.getChildAt(i).getLeft() - x);
             if (d < bestD) { bestD = d; best = i; }
         }
@@ -105,6 +109,7 @@ final class Panorama extends HorizontalScrollView {
     void scrollToSection(int i) {
         if (sections.getChildCount() == 0) return;
         i = Math.max(0, Math.min(sections.getChildCount() - 1, i));
+        if (sections.getChildAt(i).getVisibility() == GONE) return;
         int max = Math.max(0, getChildAt(0).getWidth() - getWidth());
         int target = Math.min(max, sections.getChildAt(i).getLeft());
         int start = getScrollX();

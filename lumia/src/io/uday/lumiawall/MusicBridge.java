@@ -11,21 +11,29 @@ import org.json.JSONObject;
 
 /**
  * Client for the laptop's WallBridge, reached through `adb reverse tcp:8770` (so it's 127.0.0.1 here).
- * Polls /state, fetches /art on track change, streams /spectrum only while asked to, sends /cmd/*.
+ * Polls /state, fetches /art and /lyrics on track change, streams /spectrum only while asked to, sends /cmd/*.
  */
 final class MusicBridge {
     static final String BASE = "http://127.0.0.1:8770";
 
     static final class State {
-        boolean connected, playing;
+        boolean connected, playing, estimated;   // estimated: player gave no timeline, bridge counts itself
         String title = "", artist = "", album = "", app = "";
         long positionMs, durationMs;
         int artId = -1;
     }
 
+    /** Lyrics for one track. {@code source}: loading | synced | plain | none | error. */
+    static final class Lyrics {
+        String key = "", source = "none", plain = "";
+        long[] times = new long[0];
+        String[] lines = new String[0];
+    }
+
     interface Listener {
         void onState(State s);
         void onArt(Bitmap art);
+        void onLyrics(Lyrics l);
     }
 
     private final Handler ui = new Handler(Looper.getMainLooper());
@@ -34,6 +42,7 @@ final class MusicBridge {
     private volatile boolean polling, spectrumWanted;
     private Thread pollThread, specThread;
     private int lastArtId = -1;
+    private String lyricsKey = "", lyricsSource = "";
     volatile State last = new State();
 
     MusicBridge(Listener l, VisView vis) {
@@ -70,6 +79,14 @@ final class MusicBridge {
         }, "music-cmd").start();
     }
 
+    /** Jump the laptop's player; {@code onRefused} runs on the UI thread if the player can't seek (some sites). */
+    void seek(final long ms, final Runnable onRefused) {
+        new Thread(() -> {
+            try { Probes.get(BASE + "/cmd/seek?ms=" + ms, 3000); }
+            catch (Exception e) { ui.post(onRefused); }
+        }, "music-seek").start();
+    }
+
     private void pollLoop() {
         while (polling) {
             final State s = new State();
@@ -84,6 +101,7 @@ final class MusicBridge {
                 s.positionMs = j.optLong("position_ms");
                 s.durationMs = j.optLong("duration_ms");
                 s.artId = j.optInt("art_id", -1);
+                s.estimated = j.optBoolean("estimated");
             } catch (Exception e) {
                 s.connected = false;
             }
@@ -94,7 +112,44 @@ final class MusicBridge {
                 final Bitmap art = fetchArt();
                 ui.post(() -> listener.onArt(art));
             }
+            // Lyrics: once per track; while the laptop is still looking them up, ask again each poll.
+            String key = s.title + "|" + s.artist;
+            if (!s.connected || s.title.isEmpty()) lyricsKey = "";   // the screen went idle: resend on return
+            if (s.connected && !s.title.isEmpty()
+                    && (!key.equals(lyricsKey) || lyricsSource.equals("loading") || lyricsSource.equals("error"))) {
+                final Lyrics l = fetchLyrics(key);
+                if (l != null && !(l.key.equals(lyricsKey) && l.source.equals(lyricsSource))) {
+                    lyricsKey = l.key;
+                    lyricsSource = l.source;
+                    ui.post(() -> listener.onLyrics(l));
+                }
+            }
             sleep(1000);
+        }
+    }
+
+    private Lyrics fetchLyrics(String key) {
+        try {
+            JSONObject j = new JSONObject(Probes.get(BASE + "/lyrics", 4000));
+            Lyrics l = new Lyrics();
+            l.key = j.optString("key");
+            // The bridge answers for whatever plays *now*; if the track changed under us, it's still loading ours.
+            l.source = l.key.equals(key) ? j.optString("source", "none") : "loading";
+            l.key = key;
+            l.plain = j.optString("plain");
+            org.json.JSONArray a = j.optJSONArray("lines");
+            if (a != null && l.source.equals("synced")) {
+                l.times = new long[a.length()];
+                l.lines = new String[a.length()];
+                for (int i = 0; i < a.length(); i++) {
+                    JSONObject o = a.getJSONObject(i);
+                    l.times[i] = o.optLong("t");
+                    l.lines[i] = o.optString("text");
+                }
+            }
+            return l;
+        } catch (Exception e) {
+            return null;
         }
     }
 

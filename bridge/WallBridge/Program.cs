@@ -9,7 +9,8 @@ namespace WallBridge;
 /// Tiny loopback HTTP server for Lumia Wall (raw sockets: HttpListener rejects Host "127.0.0.1" without a urlacl).
 ///   GET /state            now playing JSON
 ///   GET /art              cover art bytes (jpeg/png)
-///   GET /cmd/{playpause|next|prev}
+///   GET /cmd/{playpause|next|prev}, /cmd/seek?ms=N
+///   GET /lyrics           synced lyrics for the current track (LRCLIB), source = loading|synced|plain|none
 ///   GET /spectrum         endless stream of 32-byte frames (~30 fps); capture runs only while connected
 /// </summary>
 static class Program
@@ -17,6 +18,7 @@ static class Program
     const int Port = 8770;
     static readonly NowPlaying Np = new();
     static readonly Spectrum Spec = new();
+    static readonly Lyrics Lyr = new();
 
     static async Task Main()
     {
@@ -48,6 +50,9 @@ static class Program
                 {
                     playing = s.Playing, title = s.Title, artist = s.Artist, album = s.Album, app = s.App,
                     position_ms = s.PositionMs, duration_ms = s.DurationMs, art_id = s.ArtId,
+                    estimated = Np.Estimated,
+                    age_ms = Np.LastRefreshUtc == DateTime.MinValue ? -1 : (long)(DateTime.UtcNow - Np.LastRefreshUtc).TotalMilliseconds,
+                    error = Np.LastError,
                 });
                 await Send(stream, 200, "application/json", Encoding.UTF8.GetBytes(json));
             }
@@ -57,10 +62,32 @@ static class Program
                 bool png = art.Length > 4 && art[0] == 0x89 && art[1] == 0x50;
                 await Send(stream, art.Length > 0 ? 200 : 404, png ? "image/png" : "image/jpeg", art);
             }
+            else if (path.StartsWith("/lyrics"))
+            {
+                var s = Np.Current;
+                _ = Lyr.UpdateAsync(s.Title, s.Artist, s.Album, s.DurationMs);   // no-op if already known
+                var l = Lyr.Current;
+                var json = JsonSerializer.Serialize(new
+                {
+                    key = l.Key, source = l.Source,
+                    lines = l.Synced.Select(x => new { t = x.T, text = x.Text }),
+                    plain = l.Source == "plain" ? l.Plain : "",
+                });
+                await Send(stream, 200, "application/json", Encoding.UTF8.GetBytes(json));
+            }
             else if (path.StartsWith("/cmd/"))
             {
-                bool ok = await Np.CommandAsync(path.Substring(5).Split('?')[0]);
+                string cmd = path.Substring(5).Split('?')[0];
+                long arg = 0;
+                int q = path.IndexOf("ms=", StringComparison.Ordinal);
+                if (q >= 0) long.TryParse(path.Substring(q + 3).Split('&')[0], out arg);
+                bool ok = await Np.CommandAsync(cmd, arg);
                 await Send(stream, ok ? 200 : 409, "text/plain", Encoding.ASCII.GetBytes(ok ? "ok" : "no"));
+            }
+            else if (path.StartsWith("/debug"))
+            {
+                var json = JsonSerializer.Serialize(await Np.DebugAsync(), new JsonSerializerOptions { WriteIndented = true });
+                await Send(stream, 200, "application/json", Encoding.UTF8.GetBytes(json));
             }
             else if (path.StartsWith("/spectrum"))
             {
