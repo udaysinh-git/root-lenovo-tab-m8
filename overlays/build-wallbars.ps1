@@ -11,7 +11,7 @@ $jar  = "$sdk\platforms\android-35\android.jar"
 $src  = "$PSScriptRoot\WallBars"
 $out  = "$PSScriptRoot\build"
 $adb  = "$PSScriptRoot\..\downloads\adb-1.0.40\platform-tools\adb.exe"
-$serial = if ($env:TABLET_SERIAL) { $env:TABLET_SERIAL } else { "<serial>" }
+. "$PSScriptRoot\..\scripts\windows\find-tablet.ps1"
 
 New-Item -ItemType Directory -Force $out | Out-Null
 & "$bt\aapt2.exe" compile --dir "$src\res" -o "$out\wallbars-res.zip"
@@ -24,6 +24,8 @@ if ($LASTEXITCODE) { throw "apksigner failed" }
 "built: $out\WallBars.apk"
 
 if ($Install) {
+    $serial = Find-Tablet $adb
+    if (-not $serial) { throw "Tab M8 not found on adb (or set `$env:TABLET_SERIAL)" }
     $prop = "id=wallbars`nname=Wall bars`nversion=1`nversionCode=1`nauthor=udaysinh-git`ndescription=Status bar height 0 (hidden); Lumia Wall pulls notifications from the top edge`n"
     [IO.File]::WriteAllText("$out\module.prop", $prop)
     & $adb -s $serial push "$out\WallBars.apk" "$out\module.prop" /data/local/tmp/ | Out-Null

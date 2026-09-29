@@ -61,14 +61,25 @@ Full `getprop` highlights and the partition list: [`docs/device-info_stock.txt`]
 ## Repo layout
 
 ```
-docs/               the guide
-scripts/android/    root shell scripts for the tablet (charge limiter, partition backup, diagnostics)
-scripts/windows/    PowerShell helpers (display flip/resolution, spacedesk driver fix, popup closer, camera tunnel, network diagnostics)
+AGENTS.md           operator's manual for AI agents / contributors: architecture, rules, build + deploy procedures
+docs/               the guide (chapters 1-10) and docs/screenshots/
+lumia/              Lumia Wall, the tablet's WP8-style home screen (Gradle-less Android app)
+bridge/             WallBridge (.NET 9 laptop companion) and keepcal.py (Google Keep + Calendar sync)
+overlays/           WallBars resource overlay (hides the status bar), installed as a Magisk module
+scripts/android/    root shell scripts for the tablet (boot flow + watchdog, charge limiter, partition backup, diagnostics)
+scripts/windows/    PowerShell helpers (display setup, spacedesk driver fix, popup closer, adb tunnel keeper, find-tablet, measure-bridge)
 vcam/               "Tablet Camera" Windows 11 virtual camera (C++, from Microsoft's MIT sample) + installer
 images/             NOT in git: stock ROM, patched boot, GSI (see Releases for the small patched images)
 private/            NOT in git: device-unique partition dumps (IMEI!), logs
 downloads/          NOT in git: installers and APKs used
 ```
+
+## What it looks like
+
+| | |
+|---|---|
+| ![home](docs/screenshots/01-home-grace-wall.png) | ![music](docs/screenshots/02-music.png) |
+| ![windows](docs/screenshots/04-windows.png) | ![action center](docs/screenshots/05-action-center.png) |
 
 ## Safety
 

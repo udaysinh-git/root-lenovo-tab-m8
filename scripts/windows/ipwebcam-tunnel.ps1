@@ -11,9 +11,14 @@ param(
     [int]$BridgePort = 8770
 )
 
+. (Join-Path $PSScriptRoot 'find-tablet.ps1')
+
 while ($true) {
     $devices = & $Adb devices 2>$null | Select-String '\sdevice$' | ForEach-Object { ($_ -split '\s+')[0] }
-    $target = if ($Serial) { $Serial } else { $devices | Where-Object { $_ -notmatch ':' } | Select-Object -First 1 }
+    # identify the tablet by its vendor model, so another phone on USB is never picked up
+    # (remembered between rounds: only asked again when that device is gone)
+    if (-not $Serial -and -not ($found -and ($devices -contains $found))) { $found = Find-Tablet $Adb }
+    $target = if ($Serial) { $Serial } else { $found }
     if ($target -and ($devices -contains $target)) {
         $list = (& $Adb forward --list 2>$null) -join "`n"
         if ($list -notmatch "tcp:$LocalPort tcp:$RemotePort") {

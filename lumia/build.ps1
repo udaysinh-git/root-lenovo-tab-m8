@@ -1,7 +1,7 @@
 # Gradle-less build for Lumia Wall (same pattern as DotLauncher): aapt2 + javac + d8, framework APIs only.
 #   .\build.ps1            -> build only
 #   .\build.ps1 -Install   -> build, install on the tablet, launch it
-param([switch]$Install, [string]$Serial = $(if ($env:TABLET_SERIAL) { $env:TABLET_SERIAL } else { '<serial>' }))
+param([switch]$Install, [string]$Serial = $env:TABLET_SERIAL)
 
 $ErrorActionPreference = "Stop"
 $root = $PSScriptRoot
@@ -12,6 +12,7 @@ $out  = "$root\build"
 # adb 1.0.40 matches Camo Studio's bundled adb, so builds never kill its server (see docs/07).
 $adb  = Join-Path $root '..\downloads\adb-1.0.40\platform-tools\adb.exe'
 if (-not (Test-Path $adb)) { $adb = 'adb' }
+. (Join-Path $root '..\scripts\windows\find-tablet.ps1')
 
 if (Test-Path $out) { Get-ChildItem $out -Recurse -Force | Sort-Object FullName -Descending | Remove-Item -Force -Recurse }
 New-Item -ItemType Directory -Force -Path "$out\classes","$out\gen","$out\dex" | Out-Null
@@ -61,6 +62,8 @@ if ($LASTEXITCODE) { throw "apksigner failed" }
 "built: $out\lumiawall.apk  ({0:N0} bytes)" -f (Get-Item "$out\lumiawall.apk").Length
 
 if ($Install) {
+    if (-not $Serial) { $Serial = Find-Tablet $adb }
+    if (-not $Serial) { throw "Tab M8 not found on adb (or set `$env:TABLET_SERIAL)" }
     & $adb -s $Serial install -r "$out\lumiawall.apk"
     if ($LASTEXITCODE) { throw "adb install failed" }
     & $adb -s $Serial shell am start -n io.uday.lumiawall/.WallActivity | Out-Null
