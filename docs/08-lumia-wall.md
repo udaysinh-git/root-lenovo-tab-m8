@@ -96,3 +96,31 @@ The column is **hidden** when the song has no lyrics, nothing plays, or the look
 it stays as it was, to avoid a flicker. Hiding or showing a panorama section would shift every section after it, so if one
 of those is on screen the scroll moves with it. If the lyrics column itself was on screen, the panorama glides back
 to music.
+
+## Action center (quick settings)
+
+**Pull down from the top band** (the big title and the section headers, above the tiles) and a WP8.1-style action
+center slides down. A faint grab bar at the top centre hints that it's there. Close it with a swipe up, a tap below it,
+or back.
+
+| Tile / control | What it does |
+|---|---|
+| camera | Stops or starts the built-in camera server. Off also creates `/data/local/tmp/wall/camera.off` so the `wall-boot.sh` watchdog doesn't restart it, and Lumia Wall won't start it on launch. The laptop's Tablet Camera shows its standby picture. |
+| wi-fi, bluetooth | `svc wifi` / `svc bluetooth` enable or disable. |
+| charge | On = `charge-limit.sh` holds 50–60%. Off creates `/data/local/tmp/wall/charge.full`: the script suspends the limit and charges to 100% (e.g. before taking the tablet off the wall). |
+| night | Drops to the lowest brightness; tap again to restore. |
+| screen off | Sleeps the display (the power button wakes it). |
+| brightness slider | Perceptual (square-law) scale. While dragging, only Lumia Wall's window changes (instant, no root call per frame). On release, `settings put system screen_brightness` is written once, so it also applies to spacedesk. |
+| all settings, restart display, restart tablet | Android Settings; force-stop and relaunch spacedesk; reboot (**hold**, a tap only explains). |
+
+Everything that Android 11 reserves for system apps goes through `su` (`Root.java`, off the UI thread). Lumia Wall's
+uid is pre-granted in Magisk so there's never a prompt:
+
+```sh
+magisk --sqlite "REPLACE INTO policies (uid,policy,until,logging,notification) VALUES(<uid>,2,0,0,0)"
+# uid: dumpsys package io.uday.lumiawall | grep userId
+```
+
+Both Magisk scripts read the flag directory. `charge-limit.sh` now checks every 20 s. When restarted by hand on a running
+tablet (uptime > 10 min), `wall-boot.sh` only resumes its watchdog instead of replaying the boot sequence (home, then
+spacedesk).

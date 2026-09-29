@@ -10,7 +10,8 @@ import android.view.View;
 /** Thin monoline glyphs in the spirit of Segoe MDL2, drawn in a 24x24 design space and scaled. */
 final class Glyph extends View {
     static final int MONITOR = 0, BOOK = 1, MANGA = 2, CAMERA = 3, SERVER = 4, BATTERY = 5, MUSIC = 6, CLOUD = 7,
-            PREV = 8, PLAY = 9, PAUSE = 10, NEXT = 11;
+            PREV = 8, PLAY = 9, PAUSE = 10, NEXT = 11, WIFI = 12, BLUETOOTH = 13, MOON = 14, BOLT = 15, POWER = 16,
+            SUN = 17;
 
     private int kindOverride = -1;
     void setKind(int k) { kindOverride = k; invalidate(); }
@@ -102,6 +103,39 @@ final class Glyph extends View {
                 c.drawPath(path, p);
                 c.drawCircle(6.5f, 18, 2.6f, p);
                 c.drawCircle(17.5f, 16, 2.6f, p);
+                break;
+            case WIFI:
+                for (float r : new float[]{5f, 9.5f, 14f}) c.drawArc(new RectF(12 - r, 19 - r, 12 + r, 19 + r), 225, 90, false, p);
+                p.setStyle(Paint.Style.FILL);
+                c.drawCircle(12, 19, 1.2f, p);
+                break;
+            case BLUETOOTH:
+                path.moveTo(6.5f, 7.5f); path.lineTo(17, 16); path.lineTo(12, 20.5f); path.lineTo(12, 3.5f);
+                path.lineTo(17, 8); path.lineTo(6.5f, 16.5f);
+                c.drawPath(path, p);
+                break;
+            case MOON:
+                path.moveTo(14, 3.5f); path.cubicTo(8, 4.5f, 5, 10, 7.5f, 15.5f);
+                path.cubicTo(10, 20.5f, 16.5f, 21.5f, 20.5f, 17.5f);
+                path.cubicTo(14, 18.5f, 10.5f, 10, 14, 3.5f);
+                c.drawPath(path, p);
+                break;
+            case BOLT:
+                path.moveTo(13.5f, 2.5f); path.lineTo(5, 13.5f); path.lineTo(11.5f, 13.5f); path.lineTo(10.5f, 21.5f);
+                path.lineTo(19, 10); path.lineTo(12.5f, 10); path.close();
+                c.drawPath(path, p);
+                break;
+            case POWER:
+                c.drawArc(new RectF(4.5f, 5, 19.5f, 20), -55, 290, false, p);
+                c.drawLine(12, 3, 12, 11, p);
+                break;
+            case SUN:
+                c.drawCircle(12, 12, 3.8f, p);
+                for (int i = 0; i < 8; i++) {
+                    double a = Math.PI / 4 * i;
+                    c.drawLine(12 + 6.3f * (float) Math.cos(a), 12 + 6.3f * (float) Math.sin(a),
+                            12 + 8.8f * (float) Math.cos(a), 12 + 8.8f * (float) Math.sin(a), p);
+                }
                 break;
             case CLOUD:
                 path.moveTo(7, 18); path.cubicTo(3.5f, 18, 2.5f, 14.5f, 4.5f, 12.5f);

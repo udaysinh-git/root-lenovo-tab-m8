@@ -43,6 +43,8 @@ public class WallActivity extends Activity {
     private final List<View> tiles = new ArrayList<>();
     private final List<Tile> flippers = new ArrayList<>();
     private Panorama pano;
+    private ActionCenter center;
+    private boolean centerGesture;
     private boolean launching;
 
     // live views
@@ -60,7 +62,8 @@ public class WallActivity extends Activity {
 
         // Start the camera streamer while we're in front: a camera foreground service started from the
         // foreground keeps camera access later, when spacedesk or a reader is on screen.
-        if (checkSelfPermission(android.Manifest.permission.CAMERA) == android.content.pm.PackageManager.PERMISSION_GRANTED) {
+        if (checkSelfPermission(android.Manifest.permission.CAMERA) == android.content.pm.PackageManager.PERMISSION_GRANTED
+                && ActionCenter.cameraEnabled(this)) {                // it can be switched off in the action center
             CameraStreamService.start(this);
         }
 
@@ -74,7 +77,16 @@ public class WallActivity extends Activity {
         buildLyrics(pano.addSection("lyrics", 700));
         buildStatus(pano.addSection("status", 600));
         buildApps(pano.addSection("apps", 520));
-        setContentView(pano);
+        FrameLayout root = new FrameLayout(this);
+        root.addView(pano, new FrameLayout.LayoutParams(-1, -1));
+        View grab = new View(this);                                // hint: pull down here for the action center
+        grab.setBackgroundColor(0x33FFFFFF);
+        FrameLayout.LayoutParams gl = new FrameLayout.LayoutParams(Metro.dp(40), Metro.dp(3), Gravity.TOP | Gravity.CENTER_HORIZONTAL);
+        gl.topMargin = Metro.dp(6);
+        root.addView(grab, gl);
+        center = new ActionCenter(this);
+        root.addView(center, new FrameLayout.LayoutParams(-1, -1));
+        setContentView(root);
         showState(new MusicBridge.State());   // after all sections exist: it feeds music, lyrics and the tile
         pano.onScroll = this::updateSpectrum;
     }
@@ -395,6 +407,10 @@ public class WallActivity extends Activity {
         if ((col.getVisibility() == View.VISIBLE) == show) return;
         final int w = col.getLayoutParams().width;
         final int left = pano.sections.getChildAt(SEC_MUSIC).getRight();
+        if (!pano.isLaidOut() || left == 0) {          // first layout hasn't happened: nothing on screen to keep steady
+            col.setVisibility(show ? View.VISIBLE : View.GONE);
+            return;
+        }
         final int x = pano.getScrollX();
         final int delta = show ? (x >= left ? w : 0) : (x >= left + w / 2 ? -w : 0);
         final boolean backToMusic = !show && x > left - w / 2 && x < left + w / 2;
@@ -560,7 +576,25 @@ public class WallActivity extends Activity {
         if (hasFocus) hideSystemBars();
     }
 
+    /** A downward drag that starts in the title band (above the section content) pulls down the action center. */
+    @Override public boolean dispatchTouchEvent(android.view.MotionEvent e) {
+        if (center != null && center.interceptPull(e, Metro.dp(150))) {
+            if (!centerGesture) {                                  // take the gesture away from the panorama/tiles
+                centerGesture = true;
+                android.view.MotionEvent c = android.view.MotionEvent.obtain(e);
+                c.setAction(android.view.MotionEvent.ACTION_CANCEL);
+                super.dispatchTouchEvent(c);
+                c.recycle();
+            }
+            int a = e.getActionMasked();
+            if (a == android.view.MotionEvent.ACTION_UP || a == android.view.MotionEvent.ACTION_CANCEL) centerGesture = false;
+            return true;
+        }
+        return super.dispatchTouchEvent(e);
+    }
+
     @Override public void onBackPressed() {
+        if (center.isOpen()) { center.close(); return; }
         pano.scrollToSection(0);   // home screen: back just returns to the first section
     }
 
@@ -645,7 +679,9 @@ public class WallActivity extends Activity {
             switch (camFinal) {
                 case "open": stCamera.setText("live · the laptop is using the front camera"); camBack.setText("live"); break;
                 case "idle": stCamera.setText("ready · front camera starts when the laptop asks"); camBack.setText("ready"); break;
-                default:     stCamera.setText("not running"); camBack.setText("off");
+                default:
+                    stCamera.setText(ActionCenter.cameraEnabled(this) ? "not running" : "off · switched off in the action center");
+                    camBack.setText("off");
             }
 
             boolean any = ssh || komga || jelly;
