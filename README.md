@@ -11,6 +11,16 @@ for this chip, and the driver/firewall traps behind "spacedesk USB keeps disconn
 > Everything here was done on a **TB-8505X** (LTE) on 2026-09-29. The TB-8505F (Wi-Fi) is the same
 > platform, but **never flash X firmware on an F or vice versa**.
 
+> [!CAUTION]
+> **Disclaimer: use at your own risk.** This is what worked on **my** tablet, with my firmware version, my laptop and
+> my setup. It may not work on yours. A different hardware revision, firmware build, region, bootloader state or Windows
+> setup can change the outcome. Unlocking, rooting and flashing can **wipe your data, void your warranty, or brick the
+> device**, and some of it (IMEI/NVRAM damage, for example) can't be undone.
+>
+> I'm **not responsible** if you break your tablet, lose data or damage anything else by following this guide or
+> running anything in this repo. Read each step fully, back up first (chapter 1), and only continue if you understand
+> what a step does and accept the risk. Everything here is provided **as is, without any warranty**.
+
 ## Device
 
 | | |

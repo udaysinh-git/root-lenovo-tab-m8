@@ -4,6 +4,11 @@ This is for AI coding agents (and humans) who clone this repo. It explains what 
 fit together, the rules that must never be broken, and step-by-step procedures for building, deploying and verifying
 each part. The human-facing walkthrough is in `docs/` (chapters 1–10). This file is the operator's manual.
 
+> **Disclaimer.** Everything here is what worked on the owner's own TB-8505X, firmware and laptop. It may not work on
+> other devices, and the owner takes no responsibility for bricked devices or lost data (see the disclaimer in
+> `README.md`). If you act for a user on *their* device, make sure they know this. Never run the destructive steps
+> (unlock, flashing, partition writes) without their explicit go-ahead and a verified backup (`docs/01`).
+
 ## 1. What this project is
 
 A first-gen **Lenovo Tab M8 HD (TB-8505X)**, rooted and running **LineageOS 18.1 (Android 11) GSI**, mounted on a
