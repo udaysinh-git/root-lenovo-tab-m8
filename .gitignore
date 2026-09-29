@@ -42,3 +42,4 @@ bridge/WallBridge/obj/
 
 bridge/keepcal/.venv/
 bridge/keepcal/__pycache__/
+overlays/build/

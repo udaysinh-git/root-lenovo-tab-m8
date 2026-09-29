@@ -9,6 +9,8 @@
     <uses-permission android:name="android.permission.ACCESS_WIFI_STATE" />
     <uses-permission android:name="android.permission.CAMERA" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <!-- EdgeService: invisible top-edge strip that pulls the (hidden) status bar's notification shade down -->
+    <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />
 
     <!-- Android 11 package visibility: the tiles launch these apps -->
     <queries>
@@ -48,6 +50,7 @@
             </intent-filter>
         </activity>
         <!-- Front camera -> MJPEG on 127.0.0.1:8080 (replaces IP Webcam; no overlay banner) -->
+        <service android:name=".EdgeService" android:exported="false" />
         <service
             android:name=".CameraStreamService"
             android:foregroundServiceType="camera"

@@ -69,6 +69,8 @@ public class WallActivity extends Activity {
             CameraStreamService.start(this);
         }
 
+        EdgeService.start(this);                                  // top-edge swipe = notifications (status bar is hidden)
+
         HandlerThread t = new HandlerThread("probes");
         t.start();
         bg = new Handler(t.getLooper());

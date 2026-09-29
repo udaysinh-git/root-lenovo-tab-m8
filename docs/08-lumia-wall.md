@@ -124,3 +124,31 @@ magisk --sqlite "REPLACE INTO policies (uid,policy,until,logging,notification) V
 Both Magisk scripts read the flag directory. `charge-limit.sh` now checks every 20 s. When restarted by hand on a running
 tablet (uptime > 10 min), `wall-boot.sh` only resumes its watchdog instead of replaying the boot sequence (home, then
 spacedesk).
+
+## System bars: gesture navigation, no status bar
+
+The stock 3-button bar is big on this screen: 72 px, and because the tablet is mounted rotated, Android puts it down the
+left side. Two changes give every app the full screen.
+
+**Gesture navigation**: swipe up from the bottom edge for home, swipe up and hold for recents, swipe in from the left or
+right edge for back. It switches live:
+
+```sh
+cmd overlay enable-exclusive --category com.android.internal.systemui.navbar.gestural
+```
+
+**Status bar hidden everywhere, notifications still one swipe away**
+- Android 11 removed `policy_control` (the old global immersive switch); setting it does nothing.
+- `overlays/WallBars` is a resource overlay that sets the framework's `status_bar_height_portrait/_landscape` to 0 dp.
+  `overlays/build-wallbars.ps1 -Install` builds it and installs it as the Magisk module `wallbars`
+  (`/system/product/overlay/WallBars/WallBars.apk`, systemless).
+  - Only overlays in a preinstalled path may change framework resources that aren't declared `<overlayable>`.
+  - One reboot mounts it, then `cmd overlay enable io.uday.wallbars`. It isn't static, so
+    `cmd overlay disable io.uday.wallbars` brings the status bar back live.
+- With a 0 px status bar there's nothing left to pull the shade from, so `EdgeService` (in Lumia Wall) adds an invisible
+  12 dp strip along the top edge, above every app. A downward swipe on it runs `cmd statusbar expand-notifications`.
+  - It is a **foreground service**: a plain started service was stopped a minute after Lumia Wall left the screen
+    ("Stopping service due to app idle"). Its notification sits on a minimum-importance channel.
+  - It needs "display over other apps": `appops set io.uday.lumiawall SYSTEM_ALERT_WINDOW allow`.
+  - The **Settings app hides all third-party overlays** while it's open (anti-tapjacking), so the strip doesn't work
+    inside Settings. Use the action center or leave Settings first.

@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Hides the status bar in every app: the framework's status bar height becomes 0, so apps lay out to the top edge.
+     Notifications stay reachable: Lumia Wall's EdgeService puts an invisible strip on the top edge that pulls the
+     shade down. Not static, so it can be switched live:  cmd overlay disable io.uday.wallbars -->
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    package="io.uday.wallbars"
+    android:versionCode="1"
+    android:versionName="1.0">
+    <overlay android:targetPackage="android" android:isStatic="false" android:priority="100" />
+    <application android:hasCode="false" android:label="Wall bars" />
+</manifest>
