@@ -40,3 +40,5 @@ bridge/out/
 bridge/WallBridge/bin/
 bridge/WallBridge/obj/
 
+bridge/keepcal/.venv/
+bridge/keepcal/__pycache__/

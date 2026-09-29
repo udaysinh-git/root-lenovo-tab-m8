@@ -10,7 +10,8 @@ namespace WallBridge;
 ///   GET /state            now playing JSON
 ///   GET /art              cover art bytes (jpeg/png)
 ///   GET /cmd/{playpause|next|prev}, /cmd/seek?ms=N
-///   GET /lyrics           synced lyrics for the current track (LRCLIB), source = loading|synced|plain|none
+///   GET /keep, /calendar  Google Keep notes / today+tomorrow's events (written by keepcal.py, see KeepCal.cs)
+///   GET /lyrics          synced lyrics for the current track (LRCLIB), source = loading|synced|plain|none
 ///   GET /spectrum         endless stream of 32-byte frames (~30 fps); capture runs only while connected
 /// </summary>
 static class Program
@@ -26,6 +27,7 @@ static class Program
         if (!first) return;                                   // already running
 
         await Np.StartAsync();
+        KeepCal.Start();
         var listener = new TcpListener(IPAddress.Loopback, Port);
         listener.Start();
         while (true)
@@ -61,6 +63,10 @@ static class Program
                 var art = Np.Art;
                 bool png = art.Length > 4 && art[0] == 0x89 && art[1] == 0x50;
                 await Send(stream, art.Length > 0 ? 200 : 404, png ? "image/png" : "image/jpeg", art);
+            }
+            else if (path.StartsWith("/keep") || path.StartsWith("/calendar"))
+            {
+                await Send(stream, 200, "application/json", KeepCal.Json(path.StartsWith("/keep") ? "keep" : "calendar"));
             }
             else if (path.StartsWith("/lyrics"))
             {

@@ -44,7 +44,8 @@ public class WallActivity extends Activity {
     private final List<Tile> flippers = new ArrayList<>();
     private Panorama pano;
     private ActionCenter center;
-    private boolean centerGesture;
+    private DaySheet sheet;
+    private boolean panelGesture;
     private boolean launching;
 
     // live views
@@ -84,8 +85,15 @@ public class WallActivity extends Activity {
         FrameLayout.LayoutParams gl = new FrameLayout.LayoutParams(Metro.dp(40), Metro.dp(3), Gravity.TOP | Gravity.CENTER_HORIZONTAL);
         gl.topMargin = Metro.dp(6);
         root.addView(grab, gl);
+        View grabBottom = new View(this);                          // ...and pull up here for the day sheet
+        grabBottom.setBackgroundColor(0x33FFFFFF);
+        FrameLayout.LayoutParams gb = new FrameLayout.LayoutParams(Metro.dp(40), Metro.dp(3), Gravity.BOTTOM | Gravity.CENTER_HORIZONTAL);
+        gb.bottomMargin = Metro.dp(6);
+        root.addView(grabBottom, gb);
         center = new ActionCenter(this);
         root.addView(center, new FrameLayout.LayoutParams(-1, -1));
+        sheet = new DaySheet(this);
+        root.addView(sheet, new FrameLayout.LayoutParams(-1, -1));
         setContentView(root);
         showState(new MusicBridge.State());   // after all sections exist: it feeds music, lyrics and the tile
         pano.onScroll = this::updateSpectrum;
@@ -576,18 +584,24 @@ public class WallActivity extends Activity {
         if (hasFocus) hideSystemBars();
     }
 
-    /** A downward drag that starts in the title band (above the section content) pulls down the action center. */
+    /**
+     * A downward drag that starts in the title band (above the section content) pulls down the action center;
+     * an upward drag from the bottom edge pulls up the day sheet (Keep + Calendar).
+     */
     @Override public boolean dispatchTouchEvent(android.view.MotionEvent e) {
-        if (center != null && center.interceptPull(e, Metro.dp(150))) {
-            if (!centerGesture) {                                  // take the gesture away from the panorama/tiles
-                centerGesture = true;
+        boolean pulled = center != null && !sheet.isOpen() && center.interceptPull(e, Metro.dp(150));
+        if (!pulled && sheet != null && !center.isOpen())
+            pulled = sheet.interceptPull(e, getWindow().getDecorView().getHeight() - Metro.dp(56));
+        if (pulled) {
+            if (!panelGesture) {                                   // take the gesture away from the panorama/tiles
+                panelGesture = true;
                 android.view.MotionEvent c = android.view.MotionEvent.obtain(e);
                 c.setAction(android.view.MotionEvent.ACTION_CANCEL);
                 super.dispatchTouchEvent(c);
                 c.recycle();
             }
             int a = e.getActionMasked();
-            if (a == android.view.MotionEvent.ACTION_UP || a == android.view.MotionEvent.ACTION_CANCEL) centerGesture = false;
+            if (a == android.view.MotionEvent.ACTION_UP || a == android.view.MotionEvent.ACTION_CANCEL) panelGesture = false;
             return true;
         }
         return super.dispatchTouchEvent(e);
@@ -595,6 +609,7 @@ public class WallActivity extends Activity {
 
     @Override public void onBackPressed() {
         if (center.isOpen()) { center.close(); return; }
+        if (sheet.isOpen()) { sheet.close(); return; }
         pano.scrollToSection(0);   // home screen: back just returns to the first section
     }
 

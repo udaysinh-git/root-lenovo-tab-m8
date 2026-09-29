@@ -34,6 +34,7 @@ Full `getprop` highlights and the partition list: [`docs/device-info_stock.txt`]
 6. [Troubleshooting and dead ends](docs/06-troubleshooting.md)
 7. [Use it as an extra webcam at the same time as the display (Windows 11 virtual camera)](docs/07-webcam-camo.md)
 8. [Lumia Wall: a Windows Phone 8 home screen for the wall](docs/08-lumia-wall.md)
+9. [Day sheet: Google Keep + today's calendar](docs/09-day-sheet.md)
 
 ## New findings
 
