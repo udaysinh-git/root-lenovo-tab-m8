@@ -11,10 +11,18 @@
     <AssemblyName>WallBridge</AssemblyName>
     <RootNamespace>WallBridge</RootNamespace>
     <InvariantGlobalization>true</InvariantGlobalization>
+    <!-- Stay small in the background: no background GC thread, compact the heap more eagerly. -->
+    <ConcurrentGarbageCollection>false</ConcurrentGarbageCollection>
+    <UseSystemResourceKeys>true</UseSystemResourceKeys>
   </PropertyGroup>
 
   <ItemGroup>
+    <RuntimeHostConfigurationOption Include="System.GC.ConserveMemory" Value="7" />
+  </ItemGroup>
+
+  <ItemGroup>
     <PackageReference Include="NAudio.Wasapi" Version="2.2.1" />
+    <PackageReference Include="System.Management" Version="10.0.12" />
   </ItemGroup>
 
 </Project>

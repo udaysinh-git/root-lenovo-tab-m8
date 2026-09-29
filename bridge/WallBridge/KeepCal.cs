@@ -71,6 +71,21 @@ static class KeepCal
         return true;
     }
 
+    /// <summary>
+    /// keepcal.py syncs every minute only while the tablet has looked at the day sheet in the last few minutes
+    /// (it reads this file's timestamp); otherwise every 15 minutes. Touched at most every 30 s.
+    /// </summary>
+    public static void Watched()
+    {
+        var f = Path.Combine(Data, "keep-watch");
+        try
+        {
+            if (!File.Exists(f)) File.WriteAllText(f, "");
+            else if ((DateTime.UtcNow - File.GetLastWriteTimeUtc(f)).TotalSeconds > 30) File.SetLastWriteTimeUtc(f, DateTime.UtcNow);
+        }
+        catch { }
+    }
+
     /// <summary>"keep" or "calendar": the last JSON written, or a not-configured stub.</summary>
     public static byte[] Json(string which)
     {

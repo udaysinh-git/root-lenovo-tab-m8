@@ -37,7 +37,16 @@ CAL_DAYS = 8                                    # today + the next 7 days
 
 GOOGLE_SIG = "38918a453d07199354f8b19af05ec6562ced5788"   # signing cert of Google's Android apps
 CAL_SCOPE = "oauth2:https://www.googleapis.com/auth/calendar.readonly"
-KEEP_EVERY, CAL_EVERY = 60, 300
+KEEP_EVERY, CAL_EVERY = 60, 300          # while the tablet has looked at the day sheet recently
+IDLE_EVERY = 900                         # otherwise: every 15 min (opening the sheet forces a sync anyway)
+WATCH = os.path.join(DIR, "keep-watch")  # WallBridge touches this when the tablet asks for /keep or /calendar
+
+
+def watched():
+    try:
+        return time.time() - os.path.getmtime(WATCH) < 300
+    except OSError:
+        return False
 
 
 def load_config():
@@ -258,10 +267,11 @@ def loop(parent):
             last_keep = 0                                        # push the edit to Google and republish now
             if "calendar" in wants:
                 last_cal = 0
-        if t - last_keep >= KEEP_EVERY:
+        w = watched()
+        if t - last_keep >= (KEEP_EVERY if w else IDLE_EVERY):
             guarded("keep", sync_keep, KEEP_OUT)
             last_keep = t
-        if t - last_cal >= CAL_EVERY:
+        if t - last_cal >= (CAL_EVERY if w else IDLE_EVERY):
             guarded("calendar", sync_calendar, CAL_OUT)
             last_cal = t
         time.sleep(1)

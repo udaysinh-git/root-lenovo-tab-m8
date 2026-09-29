@@ -18,6 +18,16 @@ final class Panorama extends HorizontalScrollView {
     private final TextView title;
     private static final float TITLE_SPEED = 0.45f;   // title moves at 45% of content speed
     Runnable onScroll;                                  // e.g. start/stop work for sections coming into view
+    int homeSection;                                    // where the panorama opens (sections to its left are a swipe back)
+    private boolean placed;
+
+    @Override protected void onLayout(boolean changed, int l, int t, int r, int b) {
+        super.onLayout(changed, l, t, r, b);
+        if (!placed && sections.getChildCount() > homeSection && sections.getChildAt(homeSection).getLeft() > 0) {
+            placed = true;
+            scrollTo(sections.getChildAt(homeSection).getLeft(), 0);   // no animation on first show
+        }
+    }
 
     Panorama(Context c, String titleText) {
         super(c);

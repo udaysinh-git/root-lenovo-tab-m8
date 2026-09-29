@@ -10,7 +10,8 @@ namespace WallBridge;
 ///   GET /state            now playing JSON
 ///   GET /art              cover art bytes (jpeg/png)
 ///   GET /cmd/{playpause|next|prev}, /cmd/seek?ms=N
-///   GET /keep, /calendar  Google Keep notes / today+tomorrow's events (written by keepcal.py, see KeepCal.cs)
+///   GET /sys/stats        CPU/RAM/GPU/battery/network (SysStats.cs); /sys/state + /sys/cmd/* Windows controls (SysControl.cs)
+///   GET /keep, /calendar Google Keep notes / today+tomorrow's events (written by keepcal.py, see KeepCal.cs)
 ///   GET /lyrics          synced lyrics for the current track (LRCLIB), source = loading|synced|plain|none
 ///   GET /spectrum         endless stream of 32-byte frames (~30 fps); capture runs only while connected
 /// </summary>
@@ -47,6 +48,7 @@ static class Program
             string path = await ReadPath(stream);
             if (path.StartsWith("/state"))
             {
+                Demand.Touch("music");
                 var s = Np.Current;
                 var json = JsonSerializer.Serialize(new
                 {
@@ -64,6 +66,30 @@ static class Program
                 bool png = art.Length > 4 && art[0] == 0x89 && art[1] == 0x50;
                 await Send(stream, art.Length > 0 ? 200 : 404, png ? "image/png" : "image/jpeg", art);
             }
+            else if (path.StartsWith("/sys/stats"))
+            {
+                await Send(stream, 200, "application/json", JsonSerializer.SerializeToUtf8Bytes(SysStats.Latest()));
+            }
+            else if (path.StartsWith("/sys/state"))
+            {
+                await Send(stream, 200, "application/json", JsonSerializer.SerializeToUtf8Bytes(await SysControl.StateAsync()));
+            }
+            else if (path.StartsWith("/sys/cmd/"))
+            {
+                // /sys/cmd/{output?id=|volume?v=|mute?on=|micmute?on=|bluetooth?on=|brightness?v=|power?mode=|lock|sleep}
+                string rest = path.Substring("/sys/cmd/".Length);
+                int q = rest.IndexOf('?');
+                string cmd = q < 0 ? rest : rest[..q];
+                string arg = "";
+                if (q >= 0)
+                {
+                    var p = System.Web.HttpUtility.ParseQueryString(rest[(q + 1)..]);
+                    arg = p["id"] ?? p["v"] ?? p["on"] ?? p["mode"] ?? "";
+                }
+                bool ok;
+                try { ok = await SysControl.CommandAsync(cmd, arg); } catch { ok = false; }
+                await Send(stream, ok ? 200 : 409, "text/plain", Encoding.ASCII.GetBytes(ok ? "ok" : "no"));
+            }
             else if (path.StartsWith("/keep/check") || path.StartsWith("/keep/add") || path.StartsWith("/keep/refresh"))
             {
                 bool ok = KeepCal.Queue(path);
@@ -71,6 +97,7 @@ static class Program
             }
             else if (path.StartsWith("/keep") || path.StartsWith("/calendar"))
             {
+                KeepCal.Watched();
                 await Send(stream, 200, "application/json", KeepCal.Json(path.StartsWith("/keep") ? "keep" : "calendar"));
             }
             else if (path.StartsWith("/lyrics"))

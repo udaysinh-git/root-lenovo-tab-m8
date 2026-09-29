@@ -35,7 +35,8 @@ public class WallActivity extends Activity {
     static final int UNIT = 86, GAP = 6;
 
     // Panorama section order.
-    static final int SEC_MUSIC = 1, SEC_LYRICS = 2, SEC_STATUS = 3;
+    // "windows" sits left of home, like a WP panorama you can swipe back from; grace wall stays the home section.
+    static final int SEC_WINDOWS = 0, SEC_HOME = 1, SEC_MUSIC = 2, SEC_LYRICS = 3, SEC_STATUS = 4;
 
     private final Handler ui = new Handler(Looper.getMainLooper());
     private Handler bg;
@@ -73,6 +74,7 @@ public class WallActivity extends Activity {
         bg = new Handler(t.getLooper());
 
         pano = new Panorama(this, "uday's great wall");
+        windows = new WindowsSection(this, pano.addSection("windows", 820));
         buildStart(pano.addSection("grace wall", 8 * UNIT + 7 * GAP + 40));
         buildMusic(pano.addSection("music", 780));
         buildLyrics(pano.addSection("lyrics", 700));
@@ -96,7 +98,8 @@ public class WallActivity extends Activity {
         root.addView(sheet, new FrameLayout.LayoutParams(-1, -1));
         setContentView(root);
         showState(new MusicBridge.State());   // after all sections exist: it feeds music, lyrics and the tile
-        pano.onScroll = this::updateSpectrum;
+        pano.onScroll = () -> { updateSpectrum(); updateWindows(); };
+        pano.homeSection = SEC_HOME;                               // open on grace wall, not the leftmost section
     }
 
     // ---------------------------------------------------------------- start
@@ -335,6 +338,15 @@ public class WallActivity extends Activity {
         updateSpectrum();
     }
 
+    private WindowsSection windows;
+    private final android.graphics.Rect winRect = new android.graphics.Rect();
+
+    /** The laptop controls poll only while their section is actually in view. */
+    private void updateWindows() {
+        View col = (View) pano.sections.getChildAt(SEC_WINDOWS);
+        windows.setActive(resumed && col.getGlobalVisibleRect(winRect) && winRect.width() > Metro.dp(120));
+    }
+
     private MusicBridge.State lastState = new MusicBridge.State();
     private final android.graphics.Rect visRect = new android.graphics.Rect();
 
@@ -559,6 +571,7 @@ public class WallActivity extends Activity {
         hideSystemBars();
         launching = false;
         resumed = true;
+        pano.post(this::updateWindows);
         bridge.start();
         ui.post(tick);
         ui.postDelayed(flipper, 6000);
@@ -576,6 +589,7 @@ public class WallActivity extends Activity {
         ui.removeCallbacks(tick);
         ui.removeCallbacks(flipper);
         resumed = false;
+        windows.setActive(false);
         bridge.stop();
     }
 
@@ -610,12 +624,12 @@ public class WallActivity extends Activity {
     @Override public void onBackPressed() {
         if (center.isOpen()) { center.close(); return; }
         if (sheet.isOpen()) { sheet.close(); return; }
-        pano.scrollToSection(0);   // home screen: back just returns to the first section
+        pano.scrollToSection(SEC_HOME);   // home screen: back just returns to grace wall
     }
 
     @Override protected void onNewIntent(Intent i) {
         super.onNewIntent(i);
-        pano.scrollToSection(0);   // pressing home while home = back to the first section
+        pano.scrollToSection(SEC_HOME);   // pressing home while home = back to grace wall
     }
 
     private void hideSystemBars() {

@@ -25,21 +25,29 @@ sealed class NowPlaying
     int _artId;
     DateTime _positionAt = DateTime.UtcNow;
     string _trackKey = "";
+    volatile bool _browserSession;
     bool _ownClock;
 
     public async Task StartAsync()
     {
         _mgr = await GlobalSystemMediaTransportControlsSessionManager.RequestAsync();
         _mgr.CurrentSessionChanged += (_, _) => _ = RefreshAsync();
-        // Meter peaks are momentary, so sample often (cheap) and let the refresh ask "any sound lately?".
+        // Meter peaks are momentary, so sample often and let the refresh ask "any sound lately?". Only needed while the
+        // tablet is watching AND a browser is the player (Spotify reports pause itself).
         _ = Task.Run(async () =>
         {
-            while (true) { _audio.SampleBrowsers(); await Task.Delay(150); }
+            while (true)
+            {
+                bool need = Demand.Active("music") && _browserSession;
+                if (need) _audio.SampleBrowsers();
+                await Task.Delay(need ? 150 : 1000);
+            }
         });
         _ = Task.Run(async () =>
         {
             while (true)
             {
+                if (!Demand.Active("music")) { await Task.Delay(250); continue; }    // nobody looking: no work
                 try
                 {
                     // SMTC calls can hang forever (e.g. a browser tab closing mid-query); never let one freeze the loop.
@@ -108,6 +116,7 @@ sealed class NowPlaying
             || s.SourceAppUserModelId.Contains("firefox", StringComparison.OrdinalIgnoreCase)
             || s.SourceAppUserModelId.Contains("chrome", StringComparison.OrdinalIgnoreCase)
             || s.SourceAppUserModelId.Contains("msedge", StringComparison.OrdinalIgnoreCase);
+        _browserSession = isBrowserSession;
         if (isBrowserSession && playing) playing = _audio.BrowserAudible();
 
         string key = $"{props.Title}|{props.Artist}|{props.AlbumTitle}";

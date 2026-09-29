@@ -225,6 +225,8 @@ final class DaySheet extends FrameLayout {
 
     void open() {
         if (!isOpen()) { setVisibility(VISIBLE); refresh(); }
+        bg.post(() -> { try { Probes.get(MusicBridge.BASE + "/keep/refresh?note=all", 3000); } catch (Exception ignored) {} });
+        ui.postDelayed(this::refresh, 4000);                      // the laptop syncs lazily while nobody looks
         animateTo(1f, 420, Metro.ENTER);
         ui.removeCallbacks(periodic);
         ui.postDelayed(periodic, 60_000);

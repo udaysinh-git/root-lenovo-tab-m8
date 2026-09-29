@@ -13,6 +13,7 @@ sealed class AudioActivity
     static readonly string[] Browsers = { "zen", "firefox", "chrome", "msedge", "brave", "opera", "vivaldi", "floorp", "librewolf" };
     MMDeviceEnumerator _enum;
     DateTime _lastAudible = DateTime.MinValue;
+    readonly Dictionary<uint, string> _names = new();
 
     /// <summary>Sample the meters of every browser audio session; call ~every 0.7 s.</summary>
     public void SampleBrowsers()
@@ -26,9 +27,14 @@ sealed class AudioActivity
             {
                 var s = sessions[i];
                 if (s.State != NAudio.CoreAudioApi.Interfaces.AudioSessionState.AudioSessionStateActive) continue;
-                string name;
-                try { name = Process.GetProcessById((int)s.GetProcessID).ProcessName.ToLowerInvariant(); }
-                catch { continue; }
+                uint pid = s.GetProcessID;
+                if (!_names.TryGetValue(pid, out var name))      // process lookups are the costly part: once per pid
+                {
+                    try { name = Process.GetProcessById((int)pid).ProcessName.ToLowerInvariant(); }
+                    catch { continue; }
+                    if (_names.Count > 256) _names.Clear();
+                    _names[pid] = name;
+                }
                 if (!Browsers.Contains(name)) continue;
                 if (s.AudioMeterInformation.MasterPeakValue > 0.0015f) { _lastAudible = DateTime.UtcNow; return; }
             }
