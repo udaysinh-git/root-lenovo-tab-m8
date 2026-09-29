@@ -64,6 +64,11 @@ static class Program
                 bool png = art.Length > 4 && art[0] == 0x89 && art[1] == 0x50;
                 await Send(stream, art.Length > 0 ? 200 : 404, png ? "image/png" : "image/jpeg", art);
             }
+            else if (path.StartsWith("/keep/check") || path.StartsWith("/keep/add") || path.StartsWith("/keep/refresh"))
+            {
+                bool ok = KeepCal.Queue(path);
+                await Send(stream, ok ? 200 : 400, "text/plain", Encoding.ASCII.GetBytes(ok ? "queued" : "bad request"));
+            }
             else if (path.StartsWith("/keep") || path.StartsWith("/calendar"))
             {
                 await Send(stream, 200, "application/json", KeepCal.Json(path.StartsWith("/keep") ? "keep" : "calendar"));

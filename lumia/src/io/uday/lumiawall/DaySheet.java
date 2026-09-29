@@ -49,6 +49,8 @@ final class DaySheet extends FrameLayout {
     private ValueAnimator anim;
 
     private final List<JSONObject> notes = new ArrayList<>();
+    private Glyph refreshBtn;
+    private android.animation.ObjectAnimator spin;
     private String selectedId;
     private String lastKeep = "", lastCal = "";
 
@@ -112,6 +114,16 @@ final class DaySheet extends FrameLayout {
         cal.setOrientation(LinearLayout.VERTICAL);
         LinearLayout ch = header(a, "today");
         todayDate = (TextView) ch.getChildAt(1);
+        LinearLayout.LayoutParams tdl = (LinearLayout.LayoutParams) todayDate.getLayoutParams();
+        tdl.width = 0;
+        tdl.weight = 1f;
+        // refresh: asks the laptop to sync with Google now (not just re-read its cache); spins until fresh data lands
+        refreshBtn = new Glyph(a, Glyph.REFRESH);
+        refreshBtn.setOnTouchListener(Metro.TILT);
+        refreshBtn.setOnClickListener(v -> forceRefresh());
+        LinearLayout.LayoutParams rb = new LinearLayout.LayoutParams(Metro.dp(30), Metro.dp(30));
+        rb.bottomMargin = Metro.dp(9);
+        ch.addView(refreshBtn, rb);
         cal.addView(ch);
         agenda = vertical(a);
         agendaScroll = scroller(a, agenda);
@@ -287,6 +299,42 @@ final class DaySheet extends FrameLayout {
 
     // ------------------------------------------------------------------ data
 
+    private void forceRefresh() {
+        if (spin != null && spin.isRunning()) return;
+        final long asked = System.currentTimeMillis();
+        spin = android.animation.ObjectAnimator.ofFloat(refreshBtn, View.ROTATION, 0f, 360f);
+        spin.setDuration(900);
+        spin.setRepeatCount(android.animation.ValueAnimator.INFINITE);
+        spin.setInterpolator(new android.view.animation.LinearInterpolator());
+        spin.start();
+        bg.post(() -> {
+            try { Probes.get(MusicBridge.BASE + "/keep/refresh?note=all", 4000); }
+            catch (Exception e) {
+                ui.post(() -> {
+                    stopSpin();
+                    android.widget.Toast.makeText(act, "laptop not reachable", android.widget.Toast.LENGTH_SHORT).show();
+                });
+                return;
+            }
+            // wait until both files are newer than the request (a Google round-trip takes a few seconds)
+            for (int i = 0; i < 20; i++) {
+                try { Thread.sleep(1000); } catch (InterruptedException ignored) {}
+                try {
+                    long k = new JSONObject(Probes.get(MusicBridge.BASE + "/keep", 3000)).optLong("at");
+                    long c = new JSONObject(Probes.get(MusicBridge.BASE + "/calendar", 3000)).optLong("at");
+                    if (k >= asked - 2000 && c >= asked - 2000) break;
+                } catch (Exception ignored) {}
+            }
+            ui.post(() -> { refresh(); stopSpin(); });
+        });
+    }
+
+    private void stopSpin() {
+        if (spin == null) return;
+        spin.cancel();
+        refreshBtn.animate().rotation(0).setDuration(200).start();
+    }
+
     void refresh() {
         bg.post(() -> {
             String k = "", c = "";
@@ -404,8 +452,9 @@ final class DaySheet extends FrameLayout {
                         h.setPadding(0, Metro.dp(12), 0, Metro.dp(4));
                         list.addView(h);
                     }
-                    list.addView(checkRow(it.optString("text"), c, it.optInt("indent")));
+                    list.addView(checkRow(n, it, c));
                 }
+                if (pass == 0) list.addView(addRow(n));
             }
             detail.addView(list, gap);
         } else {
@@ -425,18 +474,90 @@ final class DaySheet extends FrameLayout {
         detail.animate().translationX(0).alpha(1f).setDuration(320).setInterpolator(Metro.ENTER).start();
     }
 
-    private View checkRow(String text, boolean checked, int indent) {
+    /** One checklist item. Tapping it ticks/unticks right away here and in Keep (via the laptop) a moment later. */
+    private View checkRow(final JSONObject note, final JSONObject item, final boolean checked) {
         LinearLayout r = new LinearLayout(getContext());
         r.setOrientation(LinearLayout.HORIZONTAL);
-        r.setGravity(Gravity.CENTER_VERTICAL);
-        r.setPadding(Metro.dp(indent * 24), Metro.dp(4), 0, Metro.dp(4));
-        r.addView(new CheckBox(getContext(), checked), new LinearLayout.LayoutParams(Metro.dp(20), Metro.dp(20)));
-        TextView t = Tile.text(getContext(), text, 18, Metro.semilight, checked ? Metro.TEXT_FAINT : Metro.TEXT);
+        r.setGravity(Gravity.TOP);                                  // box beside the first line, not mid-paragraph
+        r.setPadding(Metro.dp(item.optInt("indent") * 24), Metro.dp(6), 0, Metro.dp(6));
+        LinearLayout.LayoutParams bl = new LinearLayout.LayoutParams(Metro.dp(20), Metro.dp(20));
+        bl.topMargin = Metro.dp(3);
+        r.addView(new CheckBox(getContext(), checked), bl);
+        TextView t = Tile.text(getContext(), item.optString("text"), 18, Metro.semilight, checked ? Metro.TEXT_FAINT : Metro.TEXT);
         if (checked) t.setPaintFlags(t.getPaintFlags() | Paint.STRIKE_THRU_TEXT_FLAG);
         LinearLayout.LayoutParams tl = new LinearLayout.LayoutParams(0, -2, 1f);
         tl.leftMargin = Metro.dp(12);
         r.addView(t, tl);
+        r.setOnTouchListener(Metro.TILT);
+        r.setOnClickListener(v -> {
+            try { item.put("checked", !checked); } catch (Exception ignored) {}
+            showNote(note.optString("id"), 0);                      // re-sort: ticked items drop to "checked"
+            send("/keep/check?note=" + enc(note.optString("id")) + "&item=" + enc(item.optString("id"))
+                    + "&checked=" + (checked ? "0" : "1"));
+        });
         return r;
+    }
+
+    /** "+ add item": becomes a text field; Done adds it to the list (here at once, in Keep a moment later). */
+    private View addRow(final JSONObject note) {
+        final FrameLayout box = new FrameLayout(getContext());
+        final TextView hint = Tile.text(getContext(), "+  add item", 17, Metro.semilight, Metro.TEXT_FAINT);
+        hint.setPadding(Metro.dp(2), Metro.dp(8), 0, Metro.dp(8));
+        box.addView(hint);
+        hint.setOnClickListener(v -> {
+            final android.widget.EditText in = new android.widget.EditText(getContext());
+            in.setTypeface(Metro.semilight);
+            in.setTextSize(18);
+            in.setTextColor(Metro.TEXT);
+            in.setHintTextColor(Metro.TEXT_FAINT);
+            in.setHint("new item");
+            in.setSingleLine(true);
+            in.setBackgroundColor(0xFF1F1F1F);
+            in.setPadding(Metro.dp(10), Metro.dp(8), Metro.dp(10), Metro.dp(8));
+            in.setImeOptions(android.view.inputmethod.EditorInfo.IME_ACTION_DONE
+                    | android.view.inputmethod.EditorInfo.IME_FLAG_NO_EXTRACT_UI);
+            box.removeAllViews();
+            box.addView(in, new LayoutParams(-1, -2));
+            in.requestFocus();
+            final android.view.inputmethod.InputMethodManager imm = (android.view.inputmethod.InputMethodManager)
+                    getContext().getSystemService(Context.INPUT_METHOD_SERVICE);
+            in.post(() -> imm.showSoftInput(in, 0));
+            in.setOnEditorActionListener((tv, action, ev) -> {
+                String text = in.getText().toString().trim();
+                imm.hideSoftInputFromWindow(in.getWindowToken(), 0);
+                if (!text.isEmpty()) {
+                    try {
+                        JSONObject it = new JSONObject().put("id", "pending").put("text", text).put("checked", false);
+                        JSONArray items = note.optJSONArray("items");
+                        JSONArray nu = new JSONArray();
+                        for (int i = 0; i < items.length(); i++) nu.put(items.optJSONObject(i));
+                        nu.put(it);
+                        note.put("items", nu);
+                    } catch (Exception ignored) {}
+                    send("/keep/add?note=" + enc(note.optString("id")) + "&text=" + enc(text));
+                }
+                showNote(note.optString("id"), 0);
+                return true;
+            });
+        });
+        return box;
+    }
+
+    /** Fire an edit at the laptop, then pick up the synced result (it's applied within ~2 s). */
+    private void send(final String pathAndQuery) {
+        bg.post(() -> {
+            try { Probes.get(MusicBridge.BASE + pathAndQuery, 4000); }
+            catch (Exception e) {
+                ui.post(() -> android.widget.Toast.makeText(act, "laptop not reachable, edit not saved",
+                        android.widget.Toast.LENGTH_SHORT).show());
+            }
+        });
+        ui.postDelayed(this::refresh, 3000);
+        ui.postDelayed(this::refresh, 7000);
+    }
+
+    private static String enc(String s) {
+        try { return java.net.URLEncoder.encode(s, "UTF-8"); } catch (Exception e) { return s; }
     }
 
     /** Outlined square; checked = filled accent with a tick. */
@@ -509,37 +630,40 @@ final class DaySheet extends FrameLayout {
 
     // ------------------------------------------------------------------ calendar
 
+    /** Today first (always, even if empty), then each following day that has something, for the next week. */
     private void showCalendar(JSONObject j, String problem) {
         agenda.removeAllViews();
         JSONArray ev = j == null ? null : j.optJSONArray("events");
         if (ev == null) {
             String err = j == null ? problem : j.optString("error", "");
-            agenda.addView(Tile.text(getContext(), err.isEmpty() ? "…" : err, 16, Metro.semilight, Metro.TEXT_DIM));
+            agenda.addView(Tile.text(getContext(), err.isEmpty() ? "\u2026" : err, 16, Metro.semilight, Metro.TEXT_DIM));
             return;
         }
         long now = System.currentTimeMillis();
         Calendar cal = Calendar.getInstance();
         cal.set(Calendar.HOUR_OF_DAY, 0); cal.set(Calendar.MINUTE, 0); cal.set(Calendar.SECOND, 0); cal.set(Calendar.MILLISECOND, 0);
-        long tomorrow = cal.getTimeInMillis() + 86_400_000L;
-        int today = 0, later = 0;
-        for (int pass = 0; pass < 2; pass++) {
-            if (pass == 1) {
-                TextView h = Tile.text(getContext(), "tomorrow", 24, Metro.light, Metro.TEXT_DIM);
-                h.setPadding(0, Metro.dp(18), 0, Metro.dp(6));
+        long midnight = cal.getTimeInMillis();
+        int shownDay = 0, todayCount = 0;
+        for (int i = 0; i < ev.length(); i++) {
+            JSONObject e = ev.optJSONObject(i);
+            long s = e.optLong("start");
+            // all-day events that started earlier but are still running belong to today
+            int day = (int) Math.max(0, Math.floor((s - midnight) / 86_400_000.0));
+            if (day == 0) todayCount++;
+            if (day > 0 && shownDay == 0 && todayCount == 0)
+                agenda.addView(Tile.text(getContext(), "nothing planned", 17, Metro.semilight, Metro.TEXT_FAINT));
+            if (day != shownDay) {
+                shownDay = day;
+                String label = day == 1 ? "tomorrow" : new SimpleDateFormat("EEEE d", Locale.getDefault())
+                        .format(new Date(midnight + day * 86_400_000L)).toLowerCase(Locale.getDefault());
+                TextView h = Tile.text(getContext(), label, 22, Metro.light, Metro.TEXT_DIM);
+                h.setPadding(0, Metro.dp(16), 0, Metro.dp(6));
                 agenda.addView(h);
             }
-            for (int i = 0; i < ev.length(); i++) {
-                JSONObject e = ev.optJSONObject(i);
-                boolean isToday = e.optLong("start") < tomorrow;
-                if (isToday != (pass == 0)) continue;
-                if (pass == 0) today++; else later++;
-                agenda.addView(eventRow(e, now));
-            }
-            if (pass == 0 && today == 0)
-                agenda.addView(Tile.text(getContext(), "nothing planned", 17, Metro.semilight, Metro.TEXT_FAINT));
-            if (pass == 1 && later == 0)
-                agenda.addView(Tile.text(getContext(), "nothing yet", 15, Metro.semilight, Metro.TEXT_FAINT));
+            agenda.addView(eventRow(e, now));
         }
+        if (todayCount == 0 && shownDay == 0)
+            agenda.addView(Tile.text(getContext(), "nothing planned this week", 17, Metro.semilight, Metro.TEXT_FAINT));
         if (!j.optBoolean("ok", true)) {
             TextView off = Tile.text(getContext(), "offline, showing last sync", 13, Metro.semilight, Metro.TEXT_FAINT);
             off.setPadding(0, Metro.dp(14), 0, 0);

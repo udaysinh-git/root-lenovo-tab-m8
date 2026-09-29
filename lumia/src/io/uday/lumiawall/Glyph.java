@@ -11,7 +11,7 @@ import android.view.View;
 final class Glyph extends View {
     static final int MONITOR = 0, BOOK = 1, MANGA = 2, CAMERA = 3, SERVER = 4, BATTERY = 5, MUSIC = 6, CLOUD = 7,
             PREV = 8, PLAY = 9, PAUSE = 10, NEXT = 11, WIFI = 12, BLUETOOTH = 13, MOON = 14, BOLT = 15, POWER = 16,
-            SUN = 17;
+            SUN = 17, REFRESH = 18;
 
     private int kindOverride = -1;
     void setKind(int k) { kindOverride = k; invalidate(); }
@@ -136,6 +136,11 @@ final class Glyph extends View {
                     c.drawLine(12 + 6.3f * (float) Math.cos(a), 12 + 6.3f * (float) Math.sin(a),
                             12 + 8.8f * (float) Math.cos(a), 12 + 8.8f * (float) Math.sin(a), p);
                 }
+                break;
+            case REFRESH:
+                c.drawArc(new RectF(4.5f, 4.5f, 19.5f, 19.5f), -60, 290, false, p);
+                path.moveTo(15.2f, 2.8f); path.lineTo(16.3f, 6.9f); path.lineTo(12.2f, 7.9f);
+                c.drawPath(path, p);
                 break;
             case CLOUD:
                 path.moveTo(7, 18); path.cubicTo(3.5f, 18, 2.5f, 14.5f, 4.5f, 12.5f);

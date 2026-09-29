@@ -49,6 +49,28 @@ static class KeepCal
         _proc.BeginErrorReadLine();
     }
 
+    /// <summary>
+    /// Tablet edits: /keep/check?note=&amp;item=&amp;checked=0|1, /keep/add?note=&amp;text=, /keep/refresh?note=all. One JSON file each
+    /// into keep-cmds; keepcal.py applies them within a second, syncs to Google and republishes keep.json.
+    /// </summary>
+    public static bool Queue(string path)
+    {
+        int q = path.IndexOf('?');
+        if (q < 0) return false;
+        var p = System.Web.HttpUtility.ParseQueryString(path[(q + 1)..]);
+        string note = p["note"];
+        if (string.IsNullOrEmpty(note)) return false;
+        object cmd = path.StartsWith("/keep/check") ? new { op = "check", note, item = p["item"], @checked = p["checked"] == "1" }
+            : path.StartsWith("/keep/add") ? new { op = "add", note, text = p["text"] ?? "" }
+            : (object)new { op = "refresh", note };                                // sync Keep + Calendar now
+        var dir = Path.Combine(Data, "keep-cmds");
+        Directory.CreateDirectory(dir);
+        var name = $"{DateTime.UtcNow:yyyyMMddHHmmssfff}-{Guid.NewGuid():N}";
+        File.WriteAllText(Path.Combine(dir, name + ".tmp"), System.Text.Json.JsonSerializer.Serialize(cmd));
+        File.Move(Path.Combine(dir, name + ".tmp"), Path.Combine(dir, name + ".json"));   // appears whole
+        return true;
+    }
+
     /// <summary>"keep" or "calendar": the last JSON written, or a not-configured stub.</summary>
     public static byte[] Json(string which)
     {

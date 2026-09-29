@@ -32,6 +32,8 @@ CONFIG = os.path.join(DIR, "keepcal-config.json")
 KEEP_STATE = os.path.join(DIR, "keep-state.json")
 KEEP_OUT = os.path.join(DIR, "keep.json")
 CAL_OUT = os.path.join(DIR, "calendar.json")
+CMD_DIR = os.path.join(DIR, "keep-cmds")        # WallBridge drops tablet edits here (tick / add item)
+CAL_DAYS = 8                                    # today + the next 7 days
 
 GOOGLE_SIG = "38918a453d07199354f8b19af05ec6562ced5788"   # signing cert of Google's Android apps
 CAL_SCOPE = "oauth2:https://www.googleapis.com/auth/calendar.readonly"
@@ -115,8 +117,8 @@ def sync_keep():
             "sort": int(n.sort or 0),
         }
         if isinstance(n, gkeepapi.node.List):
-            item["items"] = [{"text": i.text, "checked": bool(i.checked), "indent": 1 if i.indented else 0}
-                             for i in n.items]
+            item["items"] = [{"id": i.id, "text": i.text, "checked": bool(i.checked),
+                              "indent": 1 if i.indented else 0} for i in n.items]
         else:
             item["text"] = n.text or ""
         notes.append(item)
@@ -151,7 +153,7 @@ def sync_calendar():
     cals.raise_for_status()
     now = dt.datetime.now().astimezone()
     start = now.replace(hour=0, minute=0, second=0, microsecond=0)
-    end = start + dt.timedelta(days=2)             # today + tomorrow
+    end = start + dt.timedelta(days=CAL_DAYS)
     events = []
     for c in cals.json().get("items", []):
         if not c.get("selected", False) or c.get("hidden", False):
@@ -218,17 +220,51 @@ def guarded(name, fn, out):
         traceback.print_exc()
 
 
+def apply_commands():
+    """Edits from the tablet, queued by WallBridge as one JSON file each: tick/untick an item, add an item."""
+    files = sorted(f for f in os.listdir(CMD_DIR) if f.endswith(".json")) if os.path.isdir(CMD_DIR) else []
+    if not files:
+        return None
+    k = keep_client()
+    wants = {"keep"}
+    for f in files:
+        path = os.path.join(CMD_DIR, f)
+        try:
+            with open(path, encoding="utf-8") as fh:
+                c = json.load(fh)
+            note = k.get(c.get("note", ""))
+            if isinstance(note, gkeepapi.node.List):
+                if c.get("op") == "check":
+                    for it in note.items:
+                        if it.id == c.get("item"):
+                            it.checked = bool(c.get("checked"))
+                elif c.get("op") == "add" and c.get("text", "").strip():
+                    note.add(c["text"].strip(), False, gkeepapi.node.NewListItemPlacementValue.Bottom)
+            if c.get("op") == "refresh":                         # the tablet's refresh button
+                wants.add("calendar")
+        except Exception:
+            traceback.print_exc()
+        finally:
+            os.remove(path)
+    return wants
+
+
 def loop(parent):
     last_keep = last_cal = 0
     while parent_alive(parent):
         t = time.time()
+        wants = guarded("keep", apply_commands, KEEP_OUT)
+        if wants:
+            last_keep = 0                                        # push the edit to Google and republish now
+            if "calendar" in wants:
+                last_cal = 0
         if t - last_keep >= KEEP_EVERY:
             guarded("keep", sync_keep, KEEP_OUT)
             last_keep = t
         if t - last_cal >= CAL_EVERY:
             guarded("calendar", sync_calendar, CAL_OUT)
             last_cal = t
-        time.sleep(5)
+        time.sleep(1)
 
 
 def main():
