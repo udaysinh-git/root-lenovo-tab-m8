@@ -40,6 +40,18 @@ ffmpeg -f dshow -i video="Camo" -frames:v 60 -vf "signalstats,metadata=print:key
 
 A steady 16.0 means no stream; anything that moves above it is a real picture.
 
+## adb version clash with Camo Studio
+
+Camo Studio bundles its own **adb 1.0.40**, and a current platform-tools adb is 1.0.41. When a client and server of different
+versions meet, the client **kills the server** ("adb server version (40) doesn't match this client (41); killing..."). Camo
+then loses the tablet and the tablet app sits there doing nothing.
+
+- Run a **matching adb for your own commands**: platform-tools **r28.0.2** has adb 1.0.40 (r28.0.3 is already 1.0.41), from
+  `https://dl.google.com/android/repository/platform-tools_r28.0.2-windows.zip`. It shares Camo's server safely.
+- A second adb server on another port (`adb -P 5038`) **doesn't** help. Every adb server grabs all USB adb interfaces.
+- If Camo's adb was killed, restart Camo Studio; it starts its adb again on launch.
+- Camo Studio's own `adb.exe` lives under `C:\Program Files\WindowsApps\...` and can't be run directly (Access denied).
+
 ## Notes
 
 - **Camera or display, not both.** On Android 11 only one app is in the foreground, so while Camo streams, the spacedesk
