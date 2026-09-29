@@ -15,3 +15,18 @@ downloads/
 *.msi
 *.exe
 *.etl
+
+# virtual camera build: third-party clone, NuGet packages, build outputs, tools
+vcam/ms-windows-camera/
+vcam/packages/
+vcam/x64/
+vcam/TabletCamSource/x64/
+vcam/nuget.exe
+vcam/install.log
+vcam/TabletCamRegister/*.obj
+*.pdb
+*.lib
+*.exp
+*.iobj
+*.ipdb
+

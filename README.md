@@ -32,7 +32,7 @@ Full `getprop` highlights and the partition list: [`docs/device-info_stock.txt`]
 4. [Charge limiter for an always-plugged tablet](docs/04-charge-limiter.md)
 5. [Use it as a Windows extra monitor (spacedesk over USB)](docs/05-wall-display-spacedesk.md)
 6. [Troubleshooting and dead ends](docs/06-troubleshooting.md)
-7. [Use it as an extra webcam (Camo over USB)](docs/07-webcam-camo.md)
+7. [Use it as an extra webcam at the same time as the display (Windows 11 virtual camera)](docs/07-webcam-camo.md)
 
 ## New findings
 
@@ -50,6 +50,8 @@ Full `getprop` highlights and the partition list: [`docs/device-info_stock.txt`]
   well past the old ~2:06 cut-off.
 - **spacedesk needs the tablet's USB in File Transfer (MTP) mode**, not adb-only. In adb-only mode Windows binds the whole device
   to the adb driver and spacedesk can't switch it into accessory mode.
+- **Webcam and display at the same time:** IP Webcam streams from a background service over an `adb forward`, and a small
+  **Windows 11 virtual camera** (built from Microsoft's sample, source in `vcam/`) turns it into a camera every app sees.
 - A **third-party firewall (Portmaster)** silently drops the viewer's LAN discovery below Windows Firewall, so nothing shows in
   Windows' logs. Fix: a per-app exception.
 
@@ -58,7 +60,8 @@ Full `getprop` highlights and the partition list: [`docs/device-info_stock.txt`]
 ```
 docs/               the guide
 scripts/android/    root shell scripts for the tablet (charge limiter, partition backup, diagnostics)
-scripts/windows/    PowerShell helpers (display flip/resolution, spacedesk driver fix, popup closer, network diagnostics)
+scripts/windows/    PowerShell helpers (display flip/resolution, spacedesk driver fix, popup closer, camera tunnel, network diagnostics)
+vcam/               "Tablet Camera" Windows 11 virtual camera (C++, from Microsoft's MIT sample) + installer
 images/             NOT in git: stock ROM, patched boot, GSI (see Releases for the small patched images)
 private/            NOT in git: device-unique partition dumps (IMEI!), logs
 downloads/          NOT in git: installers and APKs used
