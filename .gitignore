@@ -1,0 +1,17 @@
+# Large binaries (stock ROM, patched images, GSI) — small patched images are published as release assets instead
+images/
+
+# Device-unique data: partition dumps contain the IMEI/serial/calibration. Never commit.
+private/
+
+# Installers and APKs
+downloads/
+
+*.img
+*.img.xz
+*.zip
+*.apk
+*.apkm
+*.msi
+*.exe
+*.etl

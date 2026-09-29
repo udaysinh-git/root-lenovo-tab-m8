@@ -1,0 +1,58 @@
+[ro.board.platform]: [mt6761]
+[ro.boot.flash.locked]: [1]
+[ro.boot.verifiedbootstate]: [green]
+[ro.build.display.id]: [TB-8505X_S301129_230914_BMP]
+[ro.build.fingerprint]: [Lenovo/LenovoTB-8505X/8505X:10/QP1A.190711.020/S301129_230914_BMP:user/release-keys]
+[ro.build.version.release]: [10]
+[ro.build.version.sdk]: [29]
+[ro.build.version.security_patch]: [2023-08-05]
+[ro.crypto.state]: [encrypted]
+[ro.hardware]: [mt8766]
+[ro.oem_unlock_supported]: [1]
+[ro.product.device]: [8505X]
+[ro.product.model]: [Lenovo TB-8505X]
+[ro.treble.enabled]: [true]
+[ro.vendor.build.fingerprint]: [Lenovo/LenovoTB-8505X/8505X:10/QP1A.190711.020/S301129_230914_BMP:user/release-keys]
+
+boot
+boot_para
+cache
+dtbo
+expdb
+flashinfo
+frp
+gz1
+gz2
+lenovocust
+lenovoraw
+lk
+lk2
+logo
+md1img
+metadata
+nvcfg
+nvdata
+nvram
+otp
+para
+persist
+preloader_a
+preloader_b
+product
+proinfo
+protect1
+protect2
+recovery
+scp1
+scp2
+sec1
+seccfg
+spmfw
+sspm_1
+sspm_2
+system
+tee1
+tee2
+userdata
+vbmeta
+vendor
