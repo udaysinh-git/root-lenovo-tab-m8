@@ -664,6 +664,7 @@ public class WallActivity extends Activity {
     /** Every 6–11 s one random live tile flips, like a WP start screen at rest. */
     private final Runnable flipper = new Runnable() {
         @Override public void run() {
+            if (!launching) Metro.settle(tiles);                    // un-stick any tile a gesture left tilted
             if (!flippers.isEmpty() && !launching) flippers.get(rnd.nextInt(flippers.size())).flip();
             ui.postDelayed(this, 6000 + rnd.nextInt(5000));
         }

@@ -76,7 +76,13 @@ final class Metro {
 
     // ---- live tile flip: rotate to edge-on, swap faces, rotate back ----
 
-    static void flip(final View front, final View back, final boolean toBack, final View tile) {
+    // Tiles mid-flip: settle() leaves their rotationX alone.
+    private static final java.util.Set<View> FLIPPING = java.util.Collections.newSetFromMap(new java.util.WeakHashMap<>());
+
+    /** Returns false (and does nothing) if the tile is being touched or is already flipping. */
+    static boolean flip(final View front, final View back, final boolean toBack, final View tile) {
+        if (tile.isPressed() || FLIPPING.contains(tile)) return false;   // never flip under a finger
+        FLIPPING.add(tile);
         tile.setCameraDistance(8000 * density);
         tile.setPivotY(tile.getHeight() / 2f);
         ObjectAnimator out = ObjectAnimator.ofFloat(tile, View.ROTATION_X, 0f, 90f);
@@ -86,11 +92,33 @@ final class Metro {
             @Override public void onAnimationEnd(Animator a) {
                 front.setVisibility(toBack ? View.INVISIBLE : View.VISIBLE);
                 back.setVisibility(toBack ? View.VISIBLE : View.INVISIBLE);
-                tile.setRotationX(-90f);
-                tile.animate().rotationX(0f).setDuration(320).setInterpolator(ENTER).start();
+                // An ObjectAnimator, not tile.animate(): the view's ViewPropertyAnimator belongs to TILT, and
+                // starting it here used to cancel TILT's spring-back, leaving the tile stuck at 97% (a broken grid).
+                ObjectAnimator in = ObjectAnimator.ofFloat(tile, View.ROTATION_X, -90f, 0f);
+                in.setDuration(320);
+                in.setInterpolator(ENTER);
+                in.addListener(new AnimatorListenerAdapter() {
+                    @Override public void onAnimationEnd(Animator a2) { FLIPPING.remove(tile); }
+                });
+                in.start();
             }
         });
         out.start();
+        return true;
+    }
+
+    /** Safety net: ease any tile that isn't being touched back to its exact grid size and angle. */
+    static void settle(List<View> tiles) {
+        for (View t : tiles) {
+            if (t.isPressed()) continue;
+            boolean off = t.getScaleX() != 1f || t.getScaleY() != 1f || t.getRotationY() != 0f
+                    || (!FLIPPING.contains(t) && t.getRotationX() != 0f);
+            if (!off) continue;
+            android.view.ViewPropertyAnimator a = t.animate().scaleX(1f).scaleY(1f).rotationY(0f)
+                    .setDuration(200).setInterpolator(ENTER);
+            if (!FLIPPING.contains(t)) a.rotationX(0f);
+            a.start();
+        }
     }
 
     // ---- turnstile: tiles swing around the screen's left edge, one after another ----

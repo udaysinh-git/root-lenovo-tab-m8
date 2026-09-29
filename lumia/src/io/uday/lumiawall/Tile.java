@@ -47,8 +47,7 @@ final class Tile extends FrameLayout {
     /** Flip to the other face (no-op for tiles without a back). */
     void flip() {
         if (!flippable || getWidth() == 0) return;
-        showingBack = !showingBack;
-        Metro.flip(front, back, showingBack, this);
+        if (Metro.flip(front, back, !showingBack, this)) showingBack = !showingBack;
     }
 
     // ---- small builders used by the activity ----
