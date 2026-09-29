@@ -9,6 +9,11 @@ each part. The human-facing walkthrough is in `docs/` (chapters 1–10). This fi
 > `README.md`). If you act for a user on *their* device, make sure they know this. Never run the destructive steps
 > (unlock, flashing, partition writes) without their explicit go-ahead and a verified backup (`docs/01`).
 
+> **Helping someone root their own tablet, not editing this repo?** Use
+> [`docs/AGENT-RUNBOOK.md`](docs/AGENT-RUNBOOK.md) instead: a goal selector (just root / root + faster ROM / always-on /
+> full wall setup) that says which phases to run, which to skip, and the safety gates. The rest of AGENTS.md is for
+> working on the repo's own code.
+
 ## 1. What this project is
 
 A first-gen **Lenovo Tab M8 HD (TB-8505X)**, rooted and running **LineageOS 18.1 (Android 11) GSI**, mounted on a

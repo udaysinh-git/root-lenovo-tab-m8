@@ -36,6 +36,9 @@ Full `getprop` highlights and the partition list: [`docs/device-info_stock.txt`]
 
 ## Guide
 
+> Using an AI agent to do this for you? Point it at [`docs/AGENT-RUNBOOK.md`](docs/AGENT-RUNBOOK.md): tell it your goal
+> (just root, root + faster ROM, or the full wall setup) and it runs the right steps and skips the rest.
+
 1. [Get the exact stock firmware and back up the tablet](docs/01-firmware-and-backup.md)
 2. [Unlock the bootloader and root with Magisk](docs/02-unlock-and-root.md). This includes the `fastboot` vbmeta bug and fix.
 3. [Flash LineageOS 18.1 (GSI) and keep root](docs/03-lineageos-gsi.md)
