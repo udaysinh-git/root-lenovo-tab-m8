@@ -73,7 +73,7 @@ public class WallActivity extends Activity {
         t.start();
         bg = new Handler(t.getLooper());
 
-        pano = new Panorama(this, "uday's great wall");
+        pano = new Panorama(this, "da wall");
         windows = new WindowsSection(this, pano.addSection("windows", 820));
         buildStart(pano.addSection("grace wall", 8 * UNIT + 7 * GAP + 40));
         buildMusic(pano.addSection("music", 780));

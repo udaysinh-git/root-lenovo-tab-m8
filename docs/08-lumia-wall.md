@@ -3,7 +3,7 @@
 `lumia/` is a tiny (~110 KB), gradle-less Android app (framework APIs only; `aapt2 + javac + d8`, see `lumia/build.ps1`)
 that replaces the launcher with a **Windows Phone 8 panorama**:
 
-- **uday's great wall** panorama title that drifts at 45% of the scroll speed (parallax), with sections:
+- **da wall** panorama title that drifts at 45% of the scroll speed (parallax), with sections:
   - **grace wall**: live tiles: clock (flips to day and week), Pune weather (Open-Meteo, flips to high/low and humidity),
     display (spacedesk), music (live cover and track), reader (KOReader), manga (Mihon), camera, Grace, battery;
   - **music**: the laptop's now playing with transport and a live visualiser (see below);
