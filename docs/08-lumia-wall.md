@@ -43,8 +43,8 @@ It checks sockets in **LISTEN** state (`st == 0A`) only. Leftover TIME_WAIT sock
 
 ## Music: laptop now playing + live visualiser (WallBridge)
 
-ridge/WallBridge is a small, windowless .NET 9 app on the laptop (~50 MB RAM, near-zero CPU when idle). It starts from a
-shell:startup shortcut.
+`bridge/WallBridge` is a small, windowless .NET 9 app on the laptop (~50 MB RAM, near-zero CPU when idle). It starts from a
+`shell:startup` shortcut.
 - **Now playing** from Windows' own media sessions (SMTC, what the volume overlay shows): Spotify, browsers and most
   players. Spotify is preferred when several are open. Position is extrapolated between SMTC updates. Hashed
   AUMIDs are shown as "browser".
