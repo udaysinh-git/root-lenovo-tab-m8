@@ -5,8 +5,8 @@ that replaces the launcher with a **Windows Phone 8 panorama**:
 
 - **uday's great wall** panorama title that drifts at 45% of the scroll speed (parallax), with sections:
   - **grace wall**: live tiles: clock (flips to day and week), Pune weather (Open-Meteo, flips to high/low and humidity),
-    display (spacedesk), music, reader (KOReader), manga (Mihon), camera, Grace, battery;
-  - **music**: placeholder for the laptop now-playing and visualiser bridge (next);
+    display (spacedesk), music (live cover and track), reader (KOReader), manga (Mihon), camera, Grace, battery;
+  - **music**: the laptop's now playing with transport and a live visualiser (see below);
   - **status**: tablet battery and charge state, built-in camera server (live/ready/off), Grace (ssh/komga/jellyfin), Wi-Fi;
   - **apps**: WP8 app list, A–Z with outlined letter tiles.
 - **Motion:** tilt on press, random live-tile flips every 6–11 s, **turnstile** out on launch and in on return.
@@ -43,7 +43,7 @@ It checks sockets in **LISTEN** state (`st == 0A`) only. Leftover TIME_WAIT sock
 
 ## Music: laptop now playing + live visualiser (WallBridge)
 
-`bridge/WallBridge` is a small, windowless .NET 9 app on the laptop (~50 MB RAM, near-zero CPU when idle). It starts from a
+`bridge/WallBridge` is a small, windowless .NET 9 app on the laptop (~50 MB RAM, near-zero CPU when idle). It starts from a
 `shell:startup` shortcut.
 - **Now playing** from Windows' own media sessions (SMTC, what the volume overlay shows): Spotify, browsers and most
   players. Spotify is preferred when several are open. Position is extrapolated between SMTC updates. Hashed
@@ -51,13 +51,13 @@ It checks sockets in **LISTEN** state (`st == 0A`) only. Leftover TIME_WAIT sock
 - **Transport:** play/pause, next, previous.
 - **Spectrum:** WASAPI **loopback** (what the laptop plays, not the mic), 2048-pt FFT, 32 log bands (40 Hz–16 kHz),
   ~30 frames/s, slow AGC, 1 byte per band. Captures **only while the tablet is streaming it**.
-- Serves loopback-only 127.0.0.1:8770 over a raw socket (HttpListener rejects Host: 127.0.0.1 without a urlacl):
-  /state, /art, /cmd/{playpause|next|prev}, /spectrum (endless 32-byte frames).
-- The tablet reaches it through **db reverse tcp:8770 tcp:8770**, which scripts/windows/ipwebcam-tunnel.ps1 keeps
+- Serves loopback-only `127.0.0.1:8770` over a raw socket (`HttpListener` rejects `Host: 127.0.0.1` without a urlacl):
+  `/state`, `/art`, `/cmd/{playpause|next|prev}`, `/spectrum` (endless 32-byte frames).
+- The tablet reaches it through **`adb reverse tcp:8770 tcp:8770`**, which `scripts/windows/ipwebcam-tunnel.ps1` keeps
   alive next to the camera forward.
-- Build: dotnet publish bridge\WallBridge -c Release -o bridge\out (a local ridge/nuget.config adds nuget.org).
+- Build: `dotnet publish bridge\WallBridge -c Release -o bridge\out` (a local `bridge/nuget.config` adds nuget.org).
 
-On the tablet, MusicBridge.java polls /state every second, fetches the cover on track change, and streams
-/spectrum only while something plays **and** Lumia Wall is on screen. VisView draws the bars with instant attack,
+On the tablet, `MusicBridge.java` polls `/state` every second, fetches the cover on track change, and streams
+`/spectrum` only while something plays **and** Lumia Wall is on screen. `VisView` draws the bars with instant attack,
 slow release and falling peak caps. The **music** section is the WP8 now-playing layout (cover, title, artist, progress,
 round transport buttons, visualiser), and the grace wall music tile shows the live cover and track.
